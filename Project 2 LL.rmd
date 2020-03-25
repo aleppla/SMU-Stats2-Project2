@@ -1,0 +1,47 @@
+---
+title: 'Project 2:  Portuguese Banking Scenario'
+author: "Laura Lazarescou"
+date: "3/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Project 2:  6372 Applied Statistics
+
+# Exploratory Data Analysis (EDA)
+
+# Let's try a new package:  #install.packages('DataExplorer') 
+# Source for R code: https://towardsdatascience.com/simple-fast-exploratory-data-analysis-in-r-with-dataexplorer-package-e055348d9619
+
+
+```{r}
+# 2 Datasets:  bank.additional.full and bank.additional
+# Full dataset is 10 times greater than bank - use bank for predictions
+
+
+bank.full <- read.csv("C:/SMU Local/SMU T2 Stats 2 and Cloud/Applied Statistics/Project 2 Applied Stats/bank-additional/bank-additional-full.csv", sep=";")
+
+bank <- read.csv("C:/SMU Local/SMU T2 Stats 2 and Cloud/Applied Statistics/Project 2 Applied Stats/bank-additional/bank-additional.csv", sep=";")
+
+library(DataExplorer)
+plot_str(bank.full)
+plot_missing(bank.full)
+plot_histogram(bank.full)
+plot_density(bank.full)
+
+# Continuous Variables
+plot_correlation(bank.full, type = 'continuous','Review.Date')
+
+# Categorical variables
+plot_bar(bank.full)
+
+# Full report 
+create_report(bank.full)
+
+```
+
+## 
+
