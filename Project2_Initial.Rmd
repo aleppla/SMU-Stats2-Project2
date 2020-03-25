@@ -15,6 +15,13 @@ https://archive.ics.uci.edu/ml/datasets/Bank%20Marketing
 Original research on this dataset, and source:
 Moro et al., 2014] S. Moro, P. Cortez and P. Rita. A Data-Driven Approach to Predict the Success of Bank Telemarketing. Decision Support Systems, Elsevier, 62:22-31, June 2014
 
+```{r}
+
+#install.packages("ROCR")
+
+```
+
+
 # Load the data
 
 
@@ -29,6 +36,15 @@ BankData
 ```
 
 # EDA
+```{r}
+
+summary(BankData)
+
+sapply(BankData, class)
+
+```
+
+
 
 
 ## Correlation Plot
@@ -332,6 +348,96 @@ ggplot(BankData, aes(x=BankData$euribor3m, y=BankData$cons.price.idx, color=Bank
 ### comments on the plots
 THe duration vs campaign is interesting. It shows that with the successful results, as the # of contacts increases, so did the duration of the last contact. But this is only the FINAL contact. So this might just be indicating that the when the final contact was LONG it is because it was success (e.g. them talking about the contract)? Is that final long duration contact really a good PREDICTOR then, since it could be occuring just when they go to "yes"? E.g. maybe it takes a while to do some paperwork or something if they say "yes"...
 
+
+# run a basic logistic regression
+
+```{r}
+
+head(BankData)
+head(BankData[c(21)])
+
+# Function that returns Root Mean Squared Error
+rmse <- function(error)
+{
+    sqrt(mean(error^2))
+}
+
+# remove the variable "Duration" because it is not available until after the data is collected, and is a giveaway (column 11)
+includeForAuto = c(-11)
+#includeForAuto = c(1,21)
+
+#BankData[includeForAuto]
+
+
+suppressMessages(library(MASS))
+# Fit the full model 
+logRegModel <- glm(y ~ ., data=BankData[includeForAuto], family = "binomial") %>%
+  stepAIC(trace = FALSE)
+
+summary(logRegModel)
+
+# Stepwise regression model
+step.model <- stepAIC(full.model, direction = "forward", trace = FALSE)
+summary(step.model)
+
+predictAttrLogisticRegresionProbs = predict(logRegModel, BankData, inverval="predict", type = "response")
+
+predictAttrLogisticRegresion <- ifelse(predictAttrLogisticRegresionProbs > 0.5, "Yes", "No")
+
+
+predictAttrLogisticRegresion <- as.factor(predictAttrLogisticRegresion)
+length(predictAttrLogisticRegresion)
+
+
+CM = confusionMatrix(table(predictAttrLogisticRegresion,trainAndMonthly$y))
+CM
+
+# let's lot the ROC curve
+
+ROCRPred <- prediction(predictAttrLogisticRegresionProbs, trainAndMonthly$y)
+ROCRPerf <- performance(ROCRPred,"tpr","fpr")
+plot(ROCRPerf,colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+
+
+```
+
+
+
+```{r}
+library("ROCR")
+library("caret")
+
+suppressMessages(library(ROCR))
+
+# use the value with the monthly income filled in! Use our calculated values - they may be useful for predicting attrition
+trainAndMonthly = rbind(train, predictMonthlyIncomeFilledIn)
+
+includeForLogReg = c(2,3,4,5,6,7,8,9,12,13,14,15,16,17,18,19,20,21,22,24,25,26,27,28,29.30,31,32,33,34,35,36,37,38,39)
+
+logRegModel <- glm(Attrition ~ ., data=trainAndMonthly[includeForLogReg], family = "binomial") %>%
+  stepAIC(trace = FALSE)
+summary(logRegModel)
+
+predictAttrLogisticRegresionProbs = predict(logRegModel, trainAndMonthly, inverval="predict", type = "response")
+
+predictAttrLogisticRegresion <- ifelse(predictAttrLogisticRegresionProbs > 0.2, "yes", "no")
+
+
+predictAttrLogisticRegresion <- as.factor(predictAttrLogisticRegresion)
+length(predictAttrLogisticRegresion)
+
+
+CM = confusionMatrix(table(predictAttrLogisticRegresion,BankData$y))
+CM
+
+# let's lot the ROC curve
+
+ROCRPred <- prediction(predictAttrLogisticRegresionProbs, trainAndMonthly$Attrition)
+ROCRPerf <- performance(ROCRPred,"tpr","fpr")
+plot(ROCRPerf,colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+
+
+```
 
 
 
