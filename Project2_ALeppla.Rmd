@@ -1,0 +1,197 @@
+---
+title: "R Notebook"
+author: "Andrew Leppla"
+date: "3/24/2020"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Import Data
+
+```{r import}
+bank=read.csv("~/R/SMU-Stats2-Project2/bank-additional-full.csv", header=T, sep=";")
+```
+
+## Load Libraries
+
+```{r libraries}
+suppressMessages(library(ggplot2))
+suppressMessages(library(dplyr))
+suppressMessages(library(MASS))
+suppressMessages(library(caret))
+#library(mvtnorm)
+```
+
+## EDA
+
+```{r EDA}
+summary(bank)
+# default has 20% "unknown" missing data, may need to impute
+# poutcome has level "nonexistent" for most rows
+# housing and loan have 2.4% "unknown" values, probably not a big deal
+# job, education, and month all have many levels (>7)
+
+summary(bank$month)
+# month only has 10 levels, missing jan and feb
+
+bank %>% ggplot(aes(pdays,fill=y)) + geom_histogram(position="dodge",binwidth=500)
+bank %>% filter(pdays<999) %>% ggplot(aes(pdays,stat(density),fill=y)) + geom_histogram(position="dodge") 
+# pdays is mostly 999's with a few values < 30
+# Possible predictor of yes vs. no, more binary than continuous
+
+# Is pdays=999 the same as poutcome="nonexistent" ?
+pdays999=grepl(999,bank$pdays)
+summary(pdays999)
+poutcome_nonexistent=grepl("nonexistent",bank$poutcome)
+summary(poutcome_nonexistent)
+diff=factor(pdays999-poutcome_nonexistent,labels=c("same","different"))
+summary(diff)
+# Not quite the same, there are 4,110 rows (1% of data) that are different between them
+poutcome_999 = bank$poutcome[diff=="different"]
+summary(poutcome_999)
+# All 4,110 of the differing rows are poutcome="failure"
+summary(bank$poutcome)
+
+
+summary(bank$education)
+# 4% "unknown" values
+
+summary(bank$job)
+# <1% "unknown" values
+
+# duration is highly right-skewed
+bank %>% ggplot(aes(duration)) + geom_histogram()
+bank %>% filter(duration<1000) %>% ggplot(aes(duration)) + geom_histogram()
+bank %>% filter(duration<100) %>% ggplot(aes(duration)) + geom_histogram()
+
+# Only 4 rows for duration=0, 0.01% of data
+length(bank$duration[bank$duration==0])
+length(bank$duration[bank$duration==0])/length(bank$duration)*100 
+
+```
+
+```{r Transformations}
+
+# Log Transform of duration
+## Change 0s to 1s before log transform
+
+bank$duration1=bank$duration
+bank$duration1[grep("\\b0\\b",bank$duration1)]=1
+bank$log_duration=log(bank$duration1)
+
+## Log transform helps with right-skewed duration data
+par(mfrow=c(2,1))
+hist(bank$duration)
+hist(bank$log_duration)
+par(mfrow=c(1,1))
+
+
+# Log Transform of pdays
+## Change 0s 1s in new data set bank1
+
+bank$pdays1=bank$pdays
+bank$pdays1[grep("\\b0\\b",bank$pdays1)]=1
+bank$log_pdays=log(bank$pdays1)
+
+
+# Correlations between continuous predictors
+
+pairs(bank[,c(1,11,23,13,25,16:20)],col=bank$y)
+# pdays and log_duration (and maybe age or cons._.idx) looks good for LDA
+# lots of repeated values for columns 16-20
+
+cor(bank[,c(1,11,23,13,25,16:20)])
+# emp.var.rate, euribor3m, and nr.employed are highly correlated (r>0.9)
+# cons.price.idx is also moderately correlated (r= 0.52 to 0.75) 
+
+pairs(bank[,c(1,13,25,16,17,18)],col=bank$y)
+
+cor(bank[,c(1,13,25,17:18)])
+# minimal correlation between age, pdays, and cons._.idx predictors
+```
+
+
+```{r LDA}
+
+# LDA with single best predictor: pdays
+
+mylda1 <- lda(y ~ pdays, data = bank)
+
+np <- 300
+nd.x <- seq(from = min(bank$pdays), to = max(bank$pdays), length.out = np)
+nd.y <- seq(from = min(bank$cons.price.idx), to = max(bank$cons.price.idx), length.out = np)
+nd <- expand.grid(pdays = nd.x, cons.price.idx = nd.y)
+
+prd <- as.numeric(predict(mylda1, newdata = nd)$class)
+
+plot(bank[, c(13,17)], col = bank$y, main="Simple LDA")
+contour(x = nd.x, y = nd.y, z = matrix(prd, nrow = np, ncol = np), 
+        levels = c(1, 2), add = TRUE, drawlabels = FALSE, col="blue")
+
+pred<-predict(mylda1,newdata=bank)
+CM1 = confusionMatrix(table(pred$class,bank$y))
+CM1
+
+
+# LDA with log_pdays, same as pdays
+
+mylda1 <- lda(y ~ log_pdays, data = bank)
+
+np <- 300
+nd.x <- seq(from = min(bank$log_pdays), to = max(bank$log_pdays), length.out = np)
+nd.y <- seq(from = min(bank$emp.var.rate), to = max(bank$emp.var.rate), length.out = np)
+nd <- expand.grid(log_pdays = nd.x, emp.var.rate = nd.y)
+
+prd <- as.numeric(predict(mylda1, newdata = nd)$class)
+
+plot(bank[, c(25,16)], col = bank$y, main="Simple LDA")
+contour(x = nd.x, y = nd.y, z = matrix(prd, nrow = np, ncol = np), 
+        levels = c(1, 2), add = TRUE, drawlabels = FALSE, col="blue")
+
+pred<-predict(mylda1,newdata=bank)
+CM1 = confusionMatrix(table(pred$class,bank$y))
+CM1
+
+
+# Add all indep. predictors and 2-way interactions
+# Marginally better prediction
+
+bank2=bank[,c(1,17,18,25,21)]
+
+mylda2 <- lda(y ~.^2, data = bank2)
+pred<-predict(mylda2,newdata=bank2)$class
+CM2 = confusionMatrix(table(pred,bank2$y))
+CM2
+
+
+# Use leave-one-out internal Cross Validation (CV)
+## Same result as fitting full dataset above
+
+mylda2 <- lda(y ~.^2, data = bank2,CV=T)
+CM2_cv = confusionMatrix(table(mylda2$class,bank2$y))
+CM2_cv
+
+
+# Change the prediction threshold
+## Just to have the code, terrible model
+
+pred<-predict(mylda2,newdata=bank2)
+thresh <- 0.94
+out <- factor(ifelse(pred$posterior[,1] > thresh, "no", "yes"), levels = c("no", "yes"))
+confusionMatrix(out,bank2$y)
+
+
+# Change priors rather than prediction threshold
+## Again, just for code, terrible model
+
+mylda2p <- lda(y ~.^2, data = bank2,prior=c(0.33,0.67))
+pred<-predict(mylda2p,newdata=bank2)$class
+CM2p = confusionMatrix(table(pred,bank2$y))
+CM2p
+
+```
