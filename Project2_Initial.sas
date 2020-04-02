@@ -3,22 +3,38 @@ https://www.sas.com/content/dam/SAS/en_us/doc/event/analytics-experience-2016/fi
 */
 
 data bank;
-infile '/home/u36612003/bank-additional-full.csv' dlm=';' firstobs=2;
-input age job  $ marital $ education $ default $ housing $ loan $ concact $ month $ day_of_week $ duration campaign pdays previous poutcome campaign emp_var_rate cons_conf_idx euribor3m nr_employed y $;
+infile '/home/u36612003/bank-additional-full-NoQuotes.csv' dlm=';' firstobs=2;
+input age job  $ marital $ education $ default $ housing $ loan $ concact $ month $ day_of_week $ duration campaign pdays previous poutcome emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed y $;
 run;
 
-/* Tes/*
-https://www.sas.com/content/dam/SAS/en_us/doc/event/analytics-experience-2016/fitting-evaluating-logistic-regression-models-magnify-analyticsolutions.pdf
-*/
-
-data bank;
-infile '/home/u36612003/bank-additional-full.csv' dlm=';' firstobs=2;
-input age job  $ marital $ education $ default $ housing $ loan $ concact $ month $ day_of_week $ duration campaign pdays previous poutcome emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed y $;
+proc contents data=bank;
 run;
 
 /* Test train split */
 
-proc surveyselect data=bank rate=.3 outall out=bankSplit;
+
+/* 
+feature engineering - separate field for if the pdays = 999
+This feature indicates that the applicant has not previously been contanted
+
+ if findw(job,'blue-collar') then  Blue_Collar = 'Yes';
+ else Blue_Collar = 'No';
+
+*/
+
+data bank2;
+ set bank;
+ if pdays = 999 then NoPriorContact = 'Yes';
+ else NoPriorContact = 'No';
+ if job = 'blue-col' then  Blue_Collar = 'Yes';
+ else Blue_Collar = 'No';
+ if job = 'retired ' then  Retired = 'Yes';
+ else Retired = 'No';
+ if job = 'student ' then  Student = 'Yes';
+ else Student = 'No';
+run;
+
+proc surveyselect data=bank2 rate=.3 outall out=bankSplit;
    run;
 
 DATA test;
@@ -57,12 +73,12 @@ run;
 /*
 
 Including most variables
-AUC = 0.7590
+AUC = 0.7658
 */
 
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
-class job marital education default housing loan concact month day_of_week y;
-MODEL y = age job marital education housing loan previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed  / LACKFIT CTABLE;
+class job marital education default housing loan concact month day_of_week y NoPriorContact;
+MODEL y = age job marital education housing loan previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed NoPriorContact / LACKFIT CTABLE;
 score data=test out=mypreds;
 TITLE 'Bank Data Analysis';
 RUN;
@@ -78,12 +94,12 @@ https://www.sas.com/content/dam/SAS/support/en/sas-global-forum-proceedings/2019
 reduce model to include only the stuf with low p value
 take out : age marital education euribor3m
 
-AUC = 0.7586
+AUC = 0.7639
 */
 
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
-class job marital education default housing loan concact month day_of_week y;
-MODEL y = job housing loan previous emp_var_rate cons_price_idx cons_conf_idx nr_employed  / LACKFIT CTABLE;
+class job marital education default housing loan concact month day_of_week y NoPriorContact;
+MODEL y = job housing loan previous emp_var_rate cons_price_idx cons_conf_idx nr_employed NoPriorContact  / LACKFIT CTABLE;
 score data=test out=mypreds;
 TITLE 'Bank Data Analysis';
 RUN;
@@ -92,13 +108,13 @@ RUN;
 /*
 
 remove housing
-AUC = 0.7585
+AUC = 0.7636
 */
 
 
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
-class job marital education default housing loan concact month day_of_week y;
-MODEL y = job loan previous emp_var_rate cons_price_idx cons_conf_idx nr_employed  / LACKFIT CTABLE;
+class job marital education default housing loan concact month day_of_week y NoPriorContact;
+MODEL y = job loan previous emp_var_rate cons_price_idx cons_conf_idx nr_employed NoPriorContact  / LACKFIT CTABLE;
 score data=test out=mypreds;
 TITLE 'Bank Data Analysis';
 RUN;
@@ -107,16 +123,25 @@ RUN;
 /* 
 
 remove loan
-AUC = 0.7582
+AUC = 0.7630
 */
 
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
-class job marital education default housing loan concact month day_of_week y;
-MODEL y = job previous emp_var_rate cons_price_idx cons_conf_idx nr_employed  / LACKFIT CTABLE;
+class job marital education default housing loan concact month day_of_week y NoPriorContact;
+MODEL y = job previous emp_var_rate cons_price_idx cons_conf_idx nr_employed NoPriorContact  / LACKFIT CTABLE;
 score data=test out=mypreds;
 TITLE 'Bank Data Analysis';
 RUN;
 
+/*
+only use blue color, retired and student
+AUC = 0.7621
+*/
 
 
-
+PROC LOGISTIC DATA = train DESCENDING plots=ALL;
+class job marital education default housing loan concact month day_of_week y NoPriorContact Blue_Collar Student Retired;
+MODEL y = previous emp_var_rate cons_price_idx cons_conf_idx nr_employed NoPriorContact  Blue_Collar Student Retired / LACKFIT CTABLE;
+score data=test out=mypreds;
+TITLE 'Bank Data Analysis';
+RUN;
