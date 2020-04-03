@@ -24,6 +24,7 @@ suppressMessages(library(ggplot2))
 suppressMessages(library(dplyr))
 suppressMessages(library(MASS))
 suppressMessages(library(caret))
+suppressMessages(library(ROCR))
 #library(mvtnorm)
 ```
 
@@ -116,11 +117,68 @@ cor(bank[,c(1,13,25,17:18)])
 ```
 
 
-```{r LDA}
+```{r training-test split}
+
+#Split data by yes's and no's
+
+bank_yes=bank[bank$y=="yes",]
+bank_no=bank[bank$y=="no",]
+
+
+#Split yes's into 70/30 training & test sets
+
+down_sample_size = dim(bank_yes)[1]*0.7
+
+set.seed(1113)
+index<-sample(1:dim(bank_yes)[1],down_sample_size,replace=F)
+train_yes<-bank_yes[index,]
+test_yes<-bank_yes[-index,]
+
+
+#Take same number of no's as yes's for training set
+
+set.seed(3111)
+index<-sample(1:dim(bank_no)[1],down_sample_size,replace=F)
+train_no<-bank_no[index,]
+test_no<-bank_no[-index,]
+
+# Recombine the yes's and no's into training and test sets for modeling
+
+bank_train = rbind(train_yes,train_no)
+bank_test = rbind(test_yes,test_no)
+
+
+# Check that there are no missing variables between the training and test sets
+
+summary(bank_train)
+summary(bank_test)
+
+## job, education, and month all have many levels (>7)
+
+summary(bank_train$job)
+summary(bank_test$job)
+
+summary(bank_train$education)
+summary(bank_test$education)
+
+summary(bank_train$month)
+summary(bank_test$month)
+
+```
+
+
+```{r Simple LDA}
 
 # LDA with single best predictor: pdays
 
+## Full Data, No Validation
+
 mylda1 <- lda(y ~ pdays, data = bank)
+pred<-predict(mylda1,newdata=bank)
+CM1 = confusionMatrix(table(pred$class,bank$y))
+CM1 # 90% accuracy
+
+#Plot the simple LDA model
 
 np <- 300
 nd.x <- seq(from = min(bank$pdays), to = max(bank$pdays), length.out = np)
@@ -133,52 +191,97 @@ plot(bank[, c(13,17)], col = bank$y, main="Simple LDA")
 contour(x = nd.x, y = nd.y, z = matrix(prd, nrow = np, ncol = np), 
         levels = c(1, 2), add = TRUE, drawlabels = FALSE, col="blue")
 
-pred<-predict(mylda1,newdata=bank)
-CM1 = confusionMatrix(table(pred$class,bank$y))
-CM1
+
+## Leave-One_out Internal Cross Validation (CV)
+
+### Full Data
+
+mylda1a <- lda(y ~ pdays, data = bank, CV=T)
+CM1a = confusionMatrix(table(mylda1a$class,bank$y))
+CM1a # 90% accuracy
+```
 
 
-# LDA with log_pdays, same as pdays
+```{r down-sampling LDA}
 
-mylda1 <- lda(y ~ log_pdays, data = bank)
+## LDA w/ Down-Sampled Training Set
 
-np <- 300
-nd.x <- seq(from = min(bank$log_pdays), to = max(bank$log_pdays), length.out = np)
-nd.y <- seq(from = min(bank$emp.var.rate), to = max(bank$emp.var.rate), length.out = np)
-nd <- expand.grid(log_pdays = nd.x, emp.var.rate = nd.y)
+mylda1b <- lda(y ~ pdays, data = bank_train)
 
-prd <- as.numeric(predict(mylda1, newdata = nd)$class)
+### Training Set
+pred<-predict(mylda1b,newdata=bank_train)
+CM1b = confusionMatrix(table(pred$class,bank_train$y))
+CM1b
 
-plot(bank[, c(25,16)], col = bank$y, main="Simple LDA")
-contour(x = nd.x, y = nd.y, z = matrix(prd, nrow = np, ncol = np), 
-        levels = c(1, 2), add = TRUE, drawlabels = FALSE, col="blue")
-
-pred<-predict(mylda1,newdata=bank)
-CM1 = confusionMatrix(table(pred$class,bank$y))
-CM1
-
-
-# Add all indep. predictors and 2-way interactions
-# Marginally better prediction
-
-bank2=bank[,c(1,17,18,25,21)]
-
-mylda2 <- lda(y ~.^2, data = bank2)
-pred<-predict(mylda2,newdata=bank2)$class
-CM2 = confusionMatrix(table(pred,bank2$y))
-CM2
+preds1 <- as.data.frame(pred$posterior)
+pred1 <- prediction(preds1[,2],bank_train$y)
+roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred1, measure = "auc")
+auc.train <- auc.train@y.values
+plot(roc.perf)
+abline(a=0, b= 1,col="blue")
+text(x = .40, y = .4,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
 
 
-# Use leave-one-out internal Cross Validation (CV)
-## Same result as fitting full dataset above
+### Test Set - External Validation
+pred<-predict(mylda1b,newdata=bank_test)
+CM1c = confusionMatrix(table(pred$class,bank_test$y))
+CM1c
+
+preds1 <- as.data.frame(pred$posterior)
+pred1 <- prediction(preds1[,2],bank_test$y)
+roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred1, measure = "auc")
+auc.train <- auc.train@y.values
+plot(roc.perf)
+abline(a=0, b= 1,col="blue")
+text(x = .40, y = .4,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+
+
+
+# Add all indep. predictors and 2-way interactions to LDA model
+# Better ROC Curves, higher AUC
+
+## Full Data Set, Leave-One-Out Interval CV
+
+bank2=bank[,c(1,13,17,18,21)]
 
 mylda2 <- lda(y ~.^2, data = bank2,CV=T)
-CM2_cv = confusionMatrix(table(mylda2$class,bank2$y))
-CM2_cv
+CM2 = confusionMatrix(table(mylda2$class,bank2$y))
+CM2
+
+preds1 <- as.data.frame(mylda2$posterior)
+pred1 <- prediction(preds1[,2],bank2$y)
+roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred1, measure = "auc")
+auc.train <- auc.train@y.values
+plot(roc.perf)
+abline(a=0, b= 1,col="blue")
+text(x = .40, y = .4,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+
+
+## Training/Test External CV
+
+bank2_train=bank_train[,c(1,13,17,18,21)]
+bank2_test=bank_test[,c(1,13,17,18,21)]
+
+mylda2a <- lda(y ~.^2, data = bank2_train)
+pred<-predict(mylda2a,newdata=bank2_test)
+CM2 = confusionMatrix(table(pred$class,bank2_test$y))
+CM2
+
+preds1 <- as.data.frame(pred$posterior)
+pred1 <- prediction(preds1[,2],bank2_test$y)
+roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred1, measure = "auc")
+auc.train <- auc.train@y.values
+plot(roc.perf)
+abline(a=0, b= 1,col="blue")
+text(x = .35, y = .5,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
 
 
 # Change the prediction threshold
-## Just to have the code, terrible model
+## Just to have the code
 
 pred<-predict(mylda2,newdata=bank2)
 thresh <- 0.94
@@ -187,7 +290,7 @@ confusionMatrix(out,bank2$y)
 
 
 # Change priors rather than prediction threshold
-## Again, just for code, terrible model
+## Again, just for code
 
 mylda2p <- lda(y ~.^2, data = bank2,prior=c(0.33,0.67))
 pred<-predict(mylda2p,newdata=bank2)$class
