@@ -134,19 +134,19 @@ index<-sample(1:dim(bank_yes)[1],down_sample_size,replace=F)
 train_yes<-bank_yes[index,]
 test_yes<-bank_yes[-index,]
 
+dim(test_yes)[1] #1392 rows
 
 #Take same number of no's as yes's for training set
 
 set.seed(3111)
 index<-sample(1:dim(bank_no)[1],down_sample_size,replace=F)
 train_no<-bank_no[index,]
-test_no<-bank_no[-index,]
+test_no<-bank_no[-index,] #All remaining no's in test set
 
 # Recombine the yes's and no's into training and test sets for modeling
 
 bank_train = rbind(train_yes,train_no)
-bank_test = rbind(test_yes,test_no)
-
+bank_test_all = rbind(test_yes,test_no)
 
 # Check that there are no missing variables between the training and test sets
 
@@ -163,6 +163,34 @@ summary(bank_test$education)
 
 summary(bank_train$month)
 summary(bank_test$month)
+
+
+# Rebalance back to 90/10 for test set
+
+no_90 = dim(test_yes)[1]/0.1*0.9
+no_90 #12,528 rows
+
+index<-sample(1:dim(test_no)[1],no_90,replace=F)
+test_no_90_10 = test_no[index,]
+
+bank_test_90_10 = rbind(test_yes,test_no_90_10)
+summary(bank_test_90_10$y)[1]/dim(bank_test_90_10)[1] #check = 90% 
+
+
+# Rebalance to 50/50 for test set
+
+index<-sample(1:dim(test_no)[1],dim(test_yes)[1],replace=F)
+test_no_50_50 = test_no[index,]
+
+bank_test_50_50 = rbind(test_yes,test_no_50_50)
+
+
+#Write CSV files for training & test sets
+
+write.csv(bank_train,file="~/R/SMU-Stats2-Project2/bank_train_50_50.csv")
+write.csv(bank_test_all,file="~/R/SMU-Stats2-Project2/bank_test_all.csv")
+write.csv(bank_test_90_10,file="~/R/SMU-Stats2-Project2/bank_test_90_10.csv")
+write.csv(bank_test_50_50,file="~/R/SMU-Stats2-Project2/bank_test_50_50.csv")
 
 ```
 
@@ -224,6 +252,9 @@ text(x = .40, y = .4,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
 
 
 ### Test Set - External Validation
+
+bank_test=bank_test_all #Choose which test set to use for LDA
+
 pred<-predict(mylda1b,newdata=bank_test)
 CM1c = confusionMatrix(table(pred$class,bank_test$y))
 CM1c
