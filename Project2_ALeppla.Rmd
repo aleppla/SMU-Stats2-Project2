@@ -19,13 +19,15 @@ bank=read.csv("~/R/SMU-Stats2-Project2/bank-additional-full.csv", header=T, sep=
 
 ## Load Libraries
 
-```{r libraries}
-suppressMessages(library(tidyverse))
-suppressMessages(library(MASS))
-suppressMessages(library(caret))
-suppressMessages(library(ROCR))
-suppressMessages(library(glmnet))
-suppressMessages(library(bestglm))
+```{r libraries, include=FALSE}
+library(tidyverse)
+library(MASS)
+library(caret)
+library(ROCR)
+library(glmnet)
+library(bestglm)
+library(car)
+library(ResourceSelection)
 #library(mvtnorm)
 ```
 
@@ -111,18 +113,14 @@ bank %>% ggplot(aes(previous,fill=y)) + geom_histogram(position="fill")
 
 # Correlations between continuous predictors
 
-pairs(bank[,c(1,11,23,13,25,16:20)],col=bank$y)
+pairs(bank[,c(1,11:14,16:20)],col=bank$y)
 # pdays and log_duration (and maybe age or cons._.idx) looks good for LDA
 # lots of repeated values for columns 16-20
 
-cor(bank[,c(1,11,23,13,25,16:20)])
+cor(bank[,c(1,11:14,16:20)])
 # emp.var.rate, euribor3m, and nr.employed are highly correlated (r>0.9)
 # cons.price.idx is also moderately correlated (r= 0.52 to 0.75) 
 
-pairs(bank[,c(1,13,25,16,17,18)],col=bank$y)
-
-cor(bank[,c(1,13,17:20)])
-# minimal correlation between age, pdays, and cons._.idx predictors
 ```
 
 
@@ -245,7 +243,7 @@ CM1a # 90% accuracy
 ```
 
 
-## Include campaign and previous in LDA ??
+## Include campaign and previous in LDA
 
 ```{r down-sampling LDA}
 
@@ -284,14 +282,18 @@ title(main="Simple LSA - Test ROC Curve")
 
 CM1c = confusionMatrix(table(pred$class,bank_test$y))
 CM1c
+```
 
 
-# Add all indep. predictors and 2-way interactions to LDA model
+```{r Obj2 Complex LDA}
+
+# Add all cont. predictors and 2-way interactions to LDA model
 # Better ROC Curves, higher AUC
 
 ## Full Data Set, Leave-One-Out Interval CV
 
-bank2=bank[,c(1,13,17,18,21)]
+bank2=bank[,c(12:14,16:20,21)]
+# age is the only factor that doesn't improve the model
 
 mylda2 <- lda(y ~.^2, data = bank2,CV=T)
 CM2 = confusionMatrix(table(mylda2$class,bank2$y))
@@ -304,13 +306,13 @@ auc.train <- performance(pred1, measure = "auc")
 auc.train <- auc.train@y.values
 plot(roc.perf)
 abline(a=0, b= 1,col="blue")
-text(x = .40, y = .4,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+text(x = .40, y = .5,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
 title(main="LDA Complex Model - Internal CV ROC Curve")
 
 ## Training/Test External CV
 
-bank2_train=bank_train[,c(1,13,17,18,21)]
-bank2_test=bank_test[,c(1,13,17,18,21)]
+bank2_train=bank_train[,c(12:14,16:20,21)]
+bank2_test=bank_test[,c(12:14,16:20,21)]
 
 mylda2a <- lda(y ~.^2, data = bank2_train)
 
@@ -424,11 +426,11 @@ model.main<-glm(y~job+marital+education+contact+month+campaign+poutcome+emp.var.
 
 summary(model.main)
 
-library(car)
+
 (vif(model.main)[,3])^2
 #previous VIF=5
 
-library(ResourceSelection)
+
 hoslem.test(model.main$y, fitted(model.main), g=10)
 # Sig. lack of fit, but large n
 
@@ -470,12 +472,12 @@ title(main="Test Set ROC")
 ```{r Objective 2}
 
 #glmnet requires a matrix 
-dat.train.x <- model.matrix(y~.^2-1,bank_train[,c(-4,-5,-10,-11,-13,-17,-19,-20,-22)])
+dat.train.x <- model.matrix(y~.^2-1,bank_train[,c(-4,-5,-10,-11,-13,-17,-19,-20)])
 cvfit <- cv.glmnet(dat.train.x, bank_train$y, family = "binomial", type.measure = "class", nlambda = 30)
 
 plot(cvfit)
 coef(cvfit) # 20/350 terms in model
-#coef(cvfit,s="lambda.min")
+coef(cvfit,s="lambda.min")
 
 #####################################
 # Doesn't maintain variable hierarchy
@@ -483,11 +485,7 @@ coef(cvfit) # 20/350 terms in model
 
 #Get training set predictions...We know they are biased but lets create ROC's.
 #These are predicted probabilities from logistic model  exp(b)/(1+exp(b))
-fit.pred <- predict(cvfit, newx = dat.train.x, type = "response") 
-
-#Compare the prediction to the real outcome
-head(fit.pred)
-head(bank_train$y)
+fit.pred <- predict(cvfit, newx = dat.train.x, type = "response",s="lambda.min") 
 
 #Create ROC curves
 pred <- prediction(fit.pred[,1], bank_train$y)
@@ -502,9 +500,9 @@ text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
 title(main="Obj2 Training Set ROC")
 
 #Run model from training set on valid set 
-dat.test.x = model.matrix(y~.^2-1,bank_test[,c(-4,-5,-10,-11,-13,-17,-19,-20,-22)])
+dat.test.x = model.matrix(y~.^2-1,bank_test[,c(-4,-5,-10,-11,-13,-17,-19,-20)])
 
-fit.pred1 <- predict(cvfit, newx = dat.test.x, type = "response")
+fit.pred1 <- predict(cvfit, newx = dat.test.x, type = "response",s="lambda.min")
 
 #ROC curves
 pred1 <- prediction(fit.pred1[,1], bank_test$y)
@@ -515,6 +513,56 @@ plot(roc.perf1)
 abline(a=0, b= 1)
 text(x = .40, y = .6,paste("AUC = ", round(auc.val1[[1]],3), sep = ""))
 title(main="Obj2 Test Set ROC")
+
+```
+
+
+```{r Obj2 - GLM Logistic}
+
+model.main2<-glm(y~job+marital+education+contact+month+campaign+poutcome+emp.var.rate+cons.conf.idx + 
+  job*cons.conf.idx + contact*cons.conf.idx + month*emp.var.rate + month*cons.conf.idx + campaign*cons.conf.idx +
+  poutcome*emp.var.rate + poutcome*cons.conf.idx, bank_train,family = binomial(link="logit"))
+
+cor(bank[,c(12,)])
+
+#housing +loan + job*marital + job*housing + job*poutcome + marital*month + marital*poutcome + contact*month + previous*poutcome + month*campaign +  
+
+summary(model.main2)
+
+
+(vif(model.main2)[,3])^2
+
+
+hoslem.test(model.main$y, fitted(model.main2), g=10)
+# Sig. lack of fit, but large n
+
+fit1.pred.train <- predict(model.main2, newdata = bank_train) 
+
+#Create ROC curves
+pred <- prediction(fit1.pred.train, bank_train$y)
+roc.perf = performance(pred, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred, measure = "auc")
+auc.train <- auc.train@y.values
+
+#Plot ROC
+plot(roc.perf)
+abline(a=0, b= 1) #Ref line indicating poor performance
+text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+title(main="Train Set ROC")
+
+
+#Run model from training set on valid set 
+fit1.pred.test <- predict(model.main2, newdata = bank_test)
+
+#ROC curves
+pred1 <- prediction(fit1.pred.test, bank_test$y)
+roc.perf1 = performance(pred1, measure = "tpr", x.measure = "fpr")
+auc.val1 <- performance(pred1, measure = "auc")
+auc.val1 <- auc.val1@y.values
+plot(roc.perf1)
+abline(a=0, b= 1)
+text(x = .40, y = .6,paste("AUC = ", round(auc.val1[[1]],3), sep = ""))
+title(main="Test Set ROC")
 
 ```
 
