@@ -20,11 +20,12 @@ bank=read.csv("~/R/SMU-Stats2-Project2/bank-additional-full.csv", header=T, sep=
 ## Load Libraries
 
 ```{r libraries}
-suppressMessages(library(ggplot2))
-suppressMessages(library(dplyr))
+suppressMessages(library(tidyverse))
 suppressMessages(library(MASS))
 suppressMessages(library(caret))
 suppressMessages(library(ROCR))
+suppressMessages(library(glmnet))
+suppressMessages(library(bestglm))
 #library(mvtnorm)
 ```
 
@@ -39,6 +40,17 @@ summary(bank)
 
 summary(bank$month)
 # month only has 10 levels, missing jan and feb
+bank %>% ggplot(aes(month,fill=y)) + geom_bar(position="dodge") 
+bank %>% ggplot(aes(month,fill=y)) + geom_bar(position="fill") + ylab("Proportion")
+#bank_train %>% ggplot(aes(month,fill=y)) + geom_bar(position="dodge") 
+#bank_train %>% ggplot(aes(month,fill=y)) + geom_bar(position="fill") + ylab("Proportion")
+#bank_test_all %>% ggplot(aes(month,fill=y)) + geom_bar(position="dodge") 
+#bank_test_all %>% ggplot(aes(month,fill=y)) + geom_bar(position="fill") + ylab("Proportion")
+
+summary(bank$day_of_week)
+bank %>% ggplot(aes(day_of_week,fill=y)) + geom_bar(position="dodge") 
+bank %>% ggplot(aes(day_of_week,fill=y)) + geom_bar(position="fill") + ylab("Proportion")
+# No differences in day of week
 
 bank %>% ggplot(aes(pdays,fill=y)) + geom_histogram(position="dodge",binwidth=500)
 bank %>% filter(pdays<999) %>% ggplot(aes(pdays,stat(density),fill=y)) + geom_histogram(position="dodge") 
@@ -50,54 +62,51 @@ pdays999=grepl(999,bank$pdays)
 summary(pdays999)
 poutcome_nonexistent=grepl("nonexistent",bank$poutcome)
 summary(poutcome_nonexistent)
-diff=factor(pdays999-poutcome_nonexistent,labels=c("same","different"))
-summary(diff)
+diff=factor(abs(pdays999-poutcome_nonexistent),labels=c("same","different"))
+summary(diff) 
 # Not quite the same, there are 4,110 rows (1% of data) that are different between them
-poutcome_999 = bank$poutcome[diff=="different"]
+poutcome_999 = bank$poutcome[diff=="different"] 
 summary(poutcome_999)
 # All 4,110 of the differing rows are poutcome="failure"
 summary(bank$poutcome)
-
+# pdays 999 = poutcome "nonexistent" + "failure"
+## Confounded Variables
+## Keep poutcome for logistic reg.
+## Keep pdays for LDA 
 
 summary(bank$education)
 # 4% "unknown" values
+bank %>% ggplot(aes(education,fill=y)) + geom_bar(position="dodge")
+bank %>% ggplot(aes(education,fill=y)) + geom_bar(position="fill") + ylab("Proportion")
+length(grep("illiterate",bank$education)) # n=12
+#bank_train %>% ggplot(aes(education,fill=y)) + geom_bar(position="fill") + ylab("Proportion")
+#bank_test_all %>% ggplot(aes(education,fill=y)) + geom_bar(position="fill") + ylab("Proportion")
+
 
 summary(bank$job)
 # <1% "unknown" values
+bank %>% ggplot(aes(job,fill=y)) + geom_bar(position="dodge")
+bank %>% ggplot(aes(job,fill=y)) + geom_bar(position="fill") + ylab("Proportion")
+#bank_train %>% ggplot(aes(job,fill=y)) + geom_bar(position="fill") + ylab("Proportion")
+#bank_test_all %>% ggplot(aes(job,fill=y)) + geom_bar(position="fill") + ylab("Proportion")
 
-# duration is highly right-skewed
-bank %>% ggplot(aes(duration)) + geom_histogram()
-bank %>% filter(duration<1000) %>% ggplot(aes(duration)) + geom_histogram()
-bank %>% filter(duration<100) %>% ggplot(aes(duration)) + geom_histogram()
+bank %>% ggplot(aes(campaign,fill=y)) + geom_histogram(position="fill",binwidth=11)
+bank %>% ggplot(aes(campaign,fill=y)) + geom_histogram(position="fill",binwidth=0.5)
+#bank_train %>% ggplot(aes(campaign,fill=y)) + geom_histogram(position="fill",binwidth=10)
+#bank_train %>% ggplot(aes(campaign,fill=y)) + geom_histogram(position="fill",binwidth=0.5)
 
-# Only 4 rows for duration=0, 0.01% of data
-length(bank$duration[bank$duration==0])
-length(bank$duration[bank$duration==0])/length(bank$duration)*100 
+# ?? Recode campaign into ranges: 0-10,10-20,20-30,>40 ??
+
+bank %>% ggplot(aes(previous,fill=y)) + geom_histogram(position="dodge")
+bank %>% ggplot(aes(previous,fill=y)) + geom_histogram(position="fill")
+#bank_train %>% ggplot(aes(previous,fill=y)) + geom_histogram(position="dodge")
+#bank_train %>% ggplot(aes(previous,fill=y)) + geom_histogram(position="fill")
+
 
 ```
 
-```{r Transformations}
 
-# Log Transform of duration
-## Change 0s to 1s before log transform
-
-bank$duration1=bank$duration
-bank$duration1[grep("\\b0\\b",bank$duration1)]=1
-bank$log_duration=log(bank$duration1)
-
-## Log transform helps with right-skewed duration data
-par(mfrow=c(2,1))
-hist(bank$duration)
-hist(bank$log_duration)
-par(mfrow=c(1,1))
-
-
-# Log Transform of pdays
-## Change 0s 1s in new data set bank1
-
-bank$pdays1=bank$pdays
-bank$pdays1[grep("\\b0\\b",bank$pdays1)]=1
-bank$log_pdays=log(bank$pdays1)
+```{r EDA Correlations}
 
 
 # Correlations between continuous predictors
@@ -112,7 +121,7 @@ cor(bank[,c(1,11,23,13,25,16:20)])
 
 pairs(bank[,c(1,13,25,16,17,18)],col=bank$y)
 
-cor(bank[,c(1,13,25,17:18)])
+cor(bank[,c(1,13,17:20)])
 # minimal correlation between age, pdays, and cons._.idx predictors
 ```
 
@@ -184,13 +193,19 @@ test_no_50_50 = test_no[index,]
 
 bank_test_50_50 = rbind(test_yes,test_no_50_50)
 
+########################################################################
+# Use test_50_50 as test set
+bank_test=bank_test_all
+
+########################################################################
+ 
 
 #Write CSV files for training & test sets
 
-write.csv(bank_train,file="~/R/SMU-Stats2-Project2/bank_train_50_50.csv")
-write.csv(bank_test_all,file="~/R/SMU-Stats2-Project2/bank_test_all.csv")
-write.csv(bank_test_90_10,file="~/R/SMU-Stats2-Project2/bank_test_90_10.csv")
-write.csv(bank_test_50_50,file="~/R/SMU-Stats2-Project2/bank_test_50_50.csv")
+#write.csv(bank_train,file="~/R/SMU-Stats2-Project2/bank_train_50_50.csv")
+#write.csv(bank_test_all,file="~/R/SMU-Stats2-Project2/bank_test_all.csv")
+#write.csv(bank_test_90_10,file="~/R/SMU-Stats2-Project2/bank_test_90_10.csv")
+#write.csv(bank_test_50_50,file="~/R/SMU-Stats2-Project2/bank_test_50_50.csv")
 
 ```
 
@@ -230,6 +245,8 @@ CM1a # 90% accuracy
 ```
 
 
+## Include campaign and previous in LDA ??
+
 ```{r down-sampling LDA}
 
 ## LDA w/ Down-Sampled Training Set
@@ -237,10 +254,8 @@ CM1a # 90% accuracy
 mylda1b <- lda(y ~ pdays, data = bank_train)
 
 ### Training Set
-pred<-predict(mylda1b,newdata=bank_train)
-CM1b = confusionMatrix(table(pred$class,bank_train$y))
-CM1b
 
+pred<-predict(mylda1b,newdata=bank_train)
 preds1 <- as.data.frame(pred$posterior)
 pred1 <- prediction(preds1[,2],bank_train$y)
 roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
@@ -249,16 +264,14 @@ auc.train <- auc.train@y.values
 plot(roc.perf)
 abline(a=0, b= 1,col="blue")
 text(x = .40, y = .4,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+title(main="Simple LDA - Train ROC Curve")
 
+CM1b = confusionMatrix(table(pred$class,bank_train$y))
+CM1b
 
 ### Test Set - External Validation
 
-bank_test=bank_test_all #Choose which test set to use for LDA
-
 pred<-predict(mylda1b,newdata=bank_test)
-CM1c = confusionMatrix(table(pred$class,bank_test$y))
-CM1c
-
 preds1 <- as.data.frame(pred$posterior)
 pred1 <- prediction(preds1[,2],bank_test$y)
 roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
@@ -267,7 +280,10 @@ auc.train <- auc.train@y.values
 plot(roc.perf)
 abline(a=0, b= 1,col="blue")
 text(x = .40, y = .4,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+title(main="Simple LSA - Test ROC Curve")
 
+CM1c = confusionMatrix(table(pred$class,bank_test$y))
+CM1c
 
 
 # Add all indep. predictors and 2-way interactions to LDA model
@@ -289,7 +305,7 @@ auc.train <- auc.train@y.values
 plot(roc.perf)
 abline(a=0, b= 1,col="blue")
 text(x = .40, y = .4,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
-
+title(main="LDA Complex Model - Internal CV ROC Curve")
 
 ## Training/Test External CV
 
@@ -297,10 +313,19 @@ bank2_train=bank_train[,c(1,13,17,18,21)]
 bank2_test=bank_test[,c(1,13,17,18,21)]
 
 mylda2a <- lda(y ~.^2, data = bank2_train)
-pred<-predict(mylda2a,newdata=bank2_test)
-CM2 = confusionMatrix(table(pred$class,bank2_test$y))
-CM2
 
+pred<-predict(mylda2a,newdata=bank2_train)
+preds1 <- as.data.frame(pred$posterior)
+pred1 <- prediction(preds1[,2],bank2_train$y)
+roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred1, measure = "auc")
+auc.train <- auc.train@y.values
+plot(roc.perf)
+abline(a=0, b= 1,col="blue")
+text(x = .35, y = .5,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+title(main="LDA Complex Model - Train Set ROC Curve")
+
+pred<-predict(mylda2a,newdata=bank2_test)
 preds1 <- as.data.frame(pred$posterior)
 pred1 <- prediction(preds1[,2],bank2_test$y)
 roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
@@ -309,11 +334,19 @@ auc.train <- auc.train@y.values
 plot(roc.perf)
 abline(a=0, b= 1,col="blue")
 text(x = .35, y = .5,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+title(main="LDA Complex Model - Test Set ROC Curve")
 
+CM2 = confusionMatrix(table(pred$class,bank2_test$y))
+CM2 # 0.50 Threshold
+
+```
+
+
+```{r Threshold and Priors}
+
+# Just to have the code
 
 # Change the prediction threshold
-## Just to have the code
-
 pred<-predict(mylda2,newdata=bank2)
 thresh <- 0.94
 out <- factor(ifelse(pred$posterior[,1] > thresh, "no", "yes"), levels = c("no", "yes"))
@@ -321,11 +354,193 @@ confusionMatrix(out,bank2$y)
 
 
 # Change priors rather than prediction threshold
-## Again, just for code
-
 mylda2p <- lda(y ~.^2, data = bank2,prior=c(0.33,0.67))
 pred<-predict(mylda2p,newdata=bank2)$class
 CM2p = confusionMatrix(table(pred,bank2$y))
 CM2p
 
 ```
+
+
+
+```{r Obj1 - Log Reg LASSO}
+
+#glmnet requires a matrix 
+obj1.train.x <- model.matrix(y~.-1,bank_train[,c(-5,-11,-13,-17,-19,-20)]) 
+# Exclude duration, a response/covariate vs. a predictor
+# Exclude pdays, use recoded "pcontact" instead
+# Exclude economic indicators that are highly collinear
+
+cvfit1 <- cv.glmnet(obj1.train.x, bank_train$y, family = "binomial", type.measure = "class")
+plot(cvfit1)
+coef(cvfit1) # Elbow, 9 terms in model
+coef(cvfit1, s="lambda.min") # Next local min, 17 terms
+
+######################################
+# Doesn't maintain variable hierarchy
+# Rerun model with GLM ?
+######################################
+
+#Get training set predictions...We know they are biased but lets create ROC's.
+#These are predicted probabilities from logistic model  exp(b)/(1+exp(b))
+fit1.pred.train <- predict(cvfit1, newx = obj1.train.x, type = "response",s="lambda.min") 
+
+#Create ROC curves
+pred <- prediction(fit1.pred.train[,1], bank_train$y)
+roc.perf = performance(pred, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred, measure = "auc")
+auc.train <- auc.train@y.values
+
+#Plot ROC
+plot(roc.perf)
+abline(a=0, b= 1) #Ref line indicating poor performance
+text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+title(main="Obj1 - Train Set ROC")
+
+#Run model from training set on valid. set 
+obj1.test.x = model.matrix(y~.-1,bank_test[,c(-5,-11,-13,-17,-19,-20)])
+
+fit1.pred.test <- predict(cvfit1, newx = obj1.test.x, type = "response",s="lambda.min")
+
+#ROC curves
+pred1 <- prediction(fit1.pred.test[,1], bank_test$y)
+roc.perf1 = performance(pred1, measure = "tpr", x.measure = "fpr")
+auc.val1 <- performance(pred1, measure = "auc")
+auc.val1 <- auc.val1@y.values
+plot(roc.perf1)
+abline(a=0, b= 1)
+text(x = .40, y = .6,paste("AUC = ", round(auc.val1[[1]],3), sep = ""))
+title(main="Obj1 - Test Set ROC")
+
+```
+
+
+## Fit the selection model with GLM to get AIC, VIFs, etc.
+
+```{r GLM Logistic}
+
+model.main<-glm(y~job+marital+education+contact+month+campaign+poutcome+emp.var.rate+cons.conf.idx, bank_train, 
+                family = binomial(link="logit"))
+
+summary(model.main)
+
+library(car)
+(vif(model.main)[,3])^2
+#previous VIF=5
+
+library(ResourceSelection)
+hoslem.test(model.main$y, fitted(model.main), g=10)
+# Sig. lack of fit, but large n
+
+fit1.pred.train <- predict(model.main, newdata = bank_train) 
+
+#Create ROC curves
+pred <- prediction(fit1.pred.train, bank_train$y)
+roc.perf = performance(pred, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred, measure = "auc")
+auc.train <- auc.train@y.values
+
+#Plot ROC
+plot(roc.perf)
+abline(a=0, b= 1) #Ref line indicating poor performance
+text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+title(main="Train Set ROC")
+
+
+#Run model from training set on valid set 
+fit1.pred.test <- predict(model.main, newdata = bank_test)
+
+#ROC curves
+pred1 <- prediction(fit1.pred.test, bank_test$y)
+roc.perf1 = performance(pred1, measure = "tpr", x.measure = "fpr")
+auc.val1 <- performance(pred1, measure = "auc")
+auc.val1 <- auc.val1@y.values
+plot(roc.perf1)
+abline(a=0, b= 1)
+text(x = .40, y = .6,paste("AUC = ", round(auc.val1[[1]],3), sep = ""))
+title(main="Test Set ROC")
+
+```
+
+
+## Fit a more complex Logistic model with interaction terms 
+ 
+!!! This will take a few minutes to run with all of the categorical interaction terms (800+) !!!
+
+```{r Objective 2}
+
+#glmnet requires a matrix 
+dat.train.x <- model.matrix(y~.^2-1,bank_train[,c(-4,-5,-10,-11,-13,-17,-19,-20,-22)])
+cvfit <- cv.glmnet(dat.train.x, bank_train$y, family = "binomial", type.measure = "class", nlambda = 30)
+
+plot(cvfit)
+coef(cvfit) # 20/350 terms in model
+#coef(cvfit,s="lambda.min")
+
+#####################################
+# Doesn't maintain variable hierarchy
+#####################################
+
+#Get training set predictions...We know they are biased but lets create ROC's.
+#These are predicted probabilities from logistic model  exp(b)/(1+exp(b))
+fit.pred <- predict(cvfit, newx = dat.train.x, type = "response") 
+
+#Compare the prediction to the real outcome
+head(fit.pred)
+head(bank_train$y)
+
+#Create ROC curves
+pred <- prediction(fit.pred[,1], bank_train$y)
+roc.perf = performance(pred, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred, measure = "auc")
+auc.train <- auc.train@y.values
+
+#Plot ROC
+plot(roc.perf)
+abline(a=0, b= 1) #Ref line indicating poor performance
+text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+title(main="Obj2 Training Set ROC")
+
+#Run model from training set on valid set 
+dat.test.x = model.matrix(y~.^2-1,bank_test[,c(-4,-5,-10,-11,-13,-17,-19,-20,-22)])
+
+fit.pred1 <- predict(cvfit, newx = dat.test.x, type = "response")
+
+#ROC curves
+pred1 <- prediction(fit.pred1[,1], bank_test$y)
+roc.perf1 = performance(pred1, measure = "tpr", x.measure = "fpr")
+auc.val1 <- performance(pred1, measure = "auc")
+auc.val1 <- auc.val1@y.values
+plot(roc.perf1)
+abline(a=0, b= 1)
+text(x = .40, y = .6,paste("AUC = ", round(auc.val1[[1]],3), sep = ""))
+title(main="Obj2 Test Set ROC")
+
+```
+
+
+```{r Compare}
+
+#Here we are just comparing the reproducibility of the logistic model.
+#You can also use this code to compare multiple models like logistic, compared to lda, compared to a tree or RF.
+#This graph also allows for you to get a sense of what cut off values are producing the best sensitivity and specificity results as well using
+#the colorize option.
+
+#This is helpful:  https://www.r-bloggers.com/a-small-introduction-to-the-rocr-package/ that does some extra things you might find 
+#helpful.
+#If you want to mess around with other packages: https://rviews.rstudio.com/2019/03/01/some-r-packages-for-roc-curves/
+plot( roc.perf1, colorize = TRUE)
+plot(roc.perf2, add = TRUE, colorize = TRUE)
+plot(roc.perf3, add = TRUE, colorize = TRUE)
+abline(a=0, b= 1)
+
+#without color for cutoff; but adding colors to allow for comarisons of the curves
+plot( roc.perf1)
+plot(roc.perf2,col="orange", add = TRUE)
+plot(roc.perf3,col="blue", add = TRUE)
+legend("bottomright",legend=c("Valid 1","Valid 2","Valid 3"),col=c("black","orange","blue"),lty=1,lwd=1)
+abline(a=0, b= 1)
+
+
+```
+
