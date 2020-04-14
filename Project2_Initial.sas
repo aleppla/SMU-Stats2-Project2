@@ -21,6 +21,14 @@ infile '/home/u36612003/bank_test_50_50NoQuotes.csv' dlm=',' firstobs=2;
 input rownum age job  $ marital $ education $ default $ housing $ loan $ contact $ month $ day_of_week $ duration campaign pdays previous poutcome $ emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed y $;
 run;
 
+data train9010Orig;
+infile '/home/u36612003/bank_train_90_10NoQuotes.csv' dlm=',' firstobs=2;
+input rownum age job  $ marital $ education $ default $ housing $ loan $ contact $ month $ day_of_week $ duration campaign pdays previous poutcome $ emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed y $;
+run;
+
+
+
+
 
 proc contents data=train5050;
 run;
@@ -48,6 +56,8 @@ data train;
  else Services = 'no';
  if job = 'entrepre' then Entrepre = 'yes';
  else Entrepre = 'no';
+ if job = 'housemai' then HouseMaid = 'yes';
+ else HouseMaid = 'no';
  if marital = 'unknown ' then MaritalUnknown = 'yes';
  else MaritalUnknown = 'no';
  if marital = 'single ' then MaritalSingle = 'yes';
@@ -62,7 +72,52 @@ data train;
  else DefaultNo = 'no';
  if poutcome = 'success' then poutcomeSuccess = 'yes';
  else poutcomeSuccess = 'no';
+ if day_of_week = 'mon' then Monday = 'yes';
+ else Monday = 'no';
+ if day_of_week = 'thu' then Thursday = 'yes';
+ else Thursday = 'no';
+ if month in ('dec', 'mar', 'oct','sep') then HighMonth = 'yes';
+ else HighMonth = 'no';
 run;
+
+data test9010FS;
+ set test9010;
+ if pdays = 999 then NoPriorContact = 'yes';
+ else NoPriorContact = 'no';
+ if job = 'blue-col' then  Blue_Collar = 'yes';
+ else Blue_Collar = 'no';
+ if job = 'retired ' then  Retired = 'yes';
+ else Retired = 'no';
+ if job = 'student ' then  Student = 'yes';
+ else Student = 'no';
+ if job = 'services' then  Services = 'yes';
+ else Services = 'no';
+ if job = 'entrepre' then Entrepre = 'yes';
+ else Entrepre = 'no';
+ if job = 'housemai' then HouseMaid = 'yes';
+ else HouseMaid = 'no';
+ if marital = 'unknown ' then MaritalUnknown = 'yes';
+ else MaritalUnknown = 'no';
+ if marital = 'single ' then MaritalSingle = 'yes';
+ else MaritalSingle = 'no';
+ if education = 'illitera' then EducationIlliterate = 'yes';
+ else EducationIlliterate = 'no';
+ if education = 'universi' then EducationUniversity = 'yes';
+ else EducationUniversity = 'no';
+ if education = 'unknown' then EducationUnknown = 'yes';
+ else EducationUnknown = 'no';
+ if default = 'no' then DefaultNo  = 'yes';
+ else DefaultNo = 'no';
+ if poutcome = 'success' then poutcomeSuccess = 'yes';
+ else poutcomeSuccess = 'no';
+ if day_of_week = 'mon' then Monday = 'yes';
+ else Monday = 'no';
+ if day_of_week = 'thu' then Thursday = 'yes';
+ else Thursday = 'no';
+ if month in ('dec', 'mar', 'oct','sep') then HighMonth = 'yes';
+ else HighMonth = 'no';
+run;
+
 
 data test;
  set test9010;
@@ -78,6 +133,8 @@ data test;
  else Services = 'no';
  if job = 'entrepre' then Entrepre = 'yes';
  else Entrepre = 'no';
+ if job = 'housemai' then HouseMaid = 'yes';
+ else HouseMaid = 'no';
  if marital = 'unknown ' then MaritalUnknown = 'yes';
  else MaritalUnknown = 'no';
  if marital = 'single ' then MaritalSingle = 'yes';
@@ -92,7 +149,52 @@ data test;
  else DefaultNo = 'no';
  if poutcome = 'success' then poutcomeSuccess = 'yes';
  else poutcomeSuccess = 'no';
+ if day_of_week = 'mon' then Monday = 'yes';
+ else Monday = 'no';
+ if day_of_week = 'thu' then Thursday = 'yes';
+ else Thursday = 'no';
+ if month in ('dec', 'mar', 'oct','sep') then HighMonth = 'yes';
+ else HighMonth = 'no';
 run;
+
+data train9010;
+ set train9010Orig;
+ if pdays = 999 then NoPriorContact = 'yes';
+ else NoPriorContact = 'no';
+ if job = 'blue-col' then  Blue_Collar = 'yes';
+ else Blue_Collar = 'no';
+ if job = 'retired ' then  Retired = 'yes';
+ else Retired = 'no';
+ if job = 'student ' then  Student = 'yes';
+ else Student = 'no';
+ if job = 'services' then  Services = 'yes';
+ else Services = 'no';
+ if job = 'entrepre' then Entrepre = 'yes';
+ else Entrepre = 'no';
+ if job = 'housemai' then HouseMaid = 'yes';
+ else HouseMaid = 'no';
+ if marital = 'unknown ' then MaritalUnknown = 'yes';
+ else MaritalUnknown = 'no';
+ if marital = 'single ' then MaritalSingle = 'yes';
+ else MaritalSingle = 'no';
+ if education = 'illitera' then EducationIlliterate = 'yes';
+ else EducationIlliterate = 'no';
+ if education = 'universi' then EducationUniversity = 'yes';
+ else EducationUniversity = 'no';
+ if education = 'unknown' then EducationUnknown = 'yes';
+ else EducationUnknown = 'no';
+ if default = 'no' then DefaultNo  = 'yes';
+ else DefaultNo = 'no';
+ if poutcome = 'success' then poutcomeSuccess = 'yes';
+ else poutcomeSuccess = 'no';
+ if day_of_week = 'mon' then Monday = 'yes';
+ else Monday = 'no';
+ if day_of_week = 'thu' then Thursday = 'yes';
+ else Thursday = 'no';
+ if month in ('dec', 'mar', 'oct','sep') then HighMonth = 'yes';
+ else HighMonth = 'no';
+run;
+
 
 
 
@@ -101,6 +203,10 @@ run;
 
 proc print data = train(obs=10); 
 run;
+
+proc print data = train9010(obs=10); 
+run;
+
 
 /*
 Add variable for no previous contact (pdays = 999)
@@ -122,30 +228,64 @@ run;
 
 Including all variables except duration
 Not including duration because it is not available in advance
-AUC train = 0.7889
-AUC test = 0.7729
-AIC = 7130.626
+AUC train = 0.8026
+AUC test = 0.7836
+AIC = 6951.001
+*/
+
+
+
+PROC LOGISTIC DATA = train DESCENDING plots=ALL;
+class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome;
+MODEL y(event='yes') = age job marital education default housing contact month day_of_week campaign pdays loan previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome / LACKFIT details CTABLE outroc=trainroc;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
+
+/*
+remove housing
+AUC train = 0.8024
+AUC test = 0.7837
+AIC = 6950.797
+*/
+
+
+
+PROC LOGISTIC DATA = train DESCENDING plots=ALL;
+class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome;
+MODEL y(event='yes') = age job marital education contact month day_of_week campaign pdays loan previous emp_var_rate cons_price_idx euribor3m nr_employed poutcome / LACKFIT details CTABLE outroc=trainroc;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
+
+
+/*
+remove loan
+AUC train = 0.8024
+AUC test = 0.7839
+AIC = 6947.569
 */
 
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
 class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome;
-MODEL y(event='yes') = age job marital education housing contact loan previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome / LACKFIT details CTABLE outroc=trainroc;
+MODEL y(event='yes') = age job marital education contact month day_of_week campaign pdays previous emp_var_rate cons_price_idx euribor3m nr_employed poutcome / LACKFIT details CTABLE outroc=trainroc;
 score data=test out=testpred outroc=testroc;
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
 RUN;
 
 /*
-
-try removing education since the p values are so high
-AUC Train = 0.7880
-AUC Test = 0.7763
-AIC = 7127.283
+remove previous
+AUC train = 0.8024
+AUC test = 0.7839
+AIC = 6945.648
 */
 
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
 class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome;
-MODEL y(event='yes') = age job marital housing contact loan previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome / LACKFIT details CTABLE outroc=trainroc;
+MODEL y(event='yes') = age job marital education contact month day_of_week campaign pdays emp_var_rate cons_price_idx euribor3m nr_employed poutcome / LACKFIT details CTABLE outroc=trainroc;
 score data=test out=testpred outroc=testroc;
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
@@ -153,17 +293,15 @@ RUN;
 
 
 /*
-
-try removing marital since the p values are so high
-AUC Train = 0.7875
-AUC Test = 0.7762
-AIC = 7124.386
+remove nr_employed
+AUC train = 0.8023
+AUC test = 0.7839
+AIC = 6943.774
 */
 
-
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
-class job education default housing loan contact month day_of_week y NoPriorContact poutcome;
-MODEL y(event='yes') = age job housing contact loan previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome / LACKFIT details CTABLE outroc=trainroc;
+class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome;
+MODEL y(event='yes') = age job marital education contact month day_of_week campaign pdays emp_var_rate cons_price_idx euribor3m poutcome / LACKFIT details CTABLE outroc=trainroc;
 score data=test out=testpred outroc=testroc;
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
@@ -171,17 +309,78 @@ RUN;
 
 
 /*
-
-try removing housing since the p values are so high
-AUC Train = 0.7875
-AUC Test = 0.7762
-AIC = 7122.442
+remove marital
+AUC train = 0.8022
+AUC test = 0.7842
+AIC = 6939.320
 */
 
+PROC LOGISTIC DATA = train DESCENDING plots=ALL;
+class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome;
+MODEL y(event='yes') = age job education contact month day_of_week campaign pdays emp_var_rate cons_price_idx euribor3m poutcome / LACKFIT details CTABLE outroc=trainroc;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
+
+/*
+remove pdays
+AUC train = 0.8021
+AUC test =0.7836
+AIC = 
+*/
 
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
-class job education default housing loan contact month day_of_week y NoPriorContact poutcome;
-MODEL y(event='yes') = age job contact loan previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome / LACKFIT details CTABLE outroc=trainroc;
+class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome;
+MODEL y(event='yes') = age job education contact month day_of_week campaign emp_var_rate cons_price_idx euribor3m poutcome / LACKFIT details CTABLE outroc=trainroc;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
+
+/*
+remove education (entirely)
+this increase AUC test
+AUC train = 0.8013
+AUC test =0.7871
+AIC = 6934.008
+*/
+
+PROC LOGISTIC DATA = train DESCENDING plots=ALL;
+class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome;
+MODEL y(event='yes') = age job contact month day_of_week campaign emp_var_rate cons_price_idx euribor3m poutcome / LACKFIT details CTABLE outroc=trainroc;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
+
+/*
+replace day_of_week with Monday, Thursday
+this increase AUC test
+AUC train = 0.8011
+AUC test =0.7868
+AIC = 6934.008
+*/
+
+PROC LOGISTIC DATA = train DESCENDING plots=ALL;
+class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome Monday Thursday;
+MODEL y(event='yes') = age job contact month Monday Thursday campaign emp_var_rate cons_price_idx euribor3m poutcome / LACKFIT details CTABLE outroc=trainroc;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
+
+/*
+remove Thursday
+this increase AUC test
+AUC train = 0.8012
+AUC test = 0.7868
+AIC = 6929.801
+*/
+
+PROC LOGISTIC DATA = train DESCENDING plots=ALL;
+class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome Monday Thursday;
+MODEL y(event='yes') = age job contact month Monday campaign emp_var_rate cons_price_idx euribor3m poutcome / LACKFIT details CTABLE outroc=trainroc;
 score data=test out=testpred outroc=testroc;
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
@@ -189,62 +388,35 @@ RUN;
 
 
 /*
-
-try removing loan since the p values are so high
-AUC Train = 0.7874
-AUC Test = 0.7765
-AIC = 7119.788
+remove job and add retired, enterpeneur, housemai
+this increase AUC test
+AUC train = 0.8012
+AUC test = 0.7865
+AIC = 6929.801
 */
 
-
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
-class job education default housing loan contact month day_of_week y NoPriorContact poutcome;
-MODEL y(event='yes') = age job contact previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome / LACKFIT details CTABLE outroc=trainroc;
+class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome Monday Thursday Retired Entrepre HouseMaid ;
+MODEL y(event='yes') = age Retired Entrepre HouseMaid contact month Monday campaign emp_var_rate cons_price_idx euribor3m poutcome / LACKFIT details CTABLE outroc=trainroc;
 score data=test out=testpred outroc=testroc;
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
 RUN;
 
 
-
-/*
-
-try removing previous since the p values are so high
-AUC Train = 0.7823
-AUC Test = 0.7762
-AIC = 7118.195
+/****
+*********
+Same model but using 9010 for training
 */
 
 
-PROC LOGISTIC DATA = train DESCENDING plots=ALL;
-class job education default housing loan contact month day_of_week y NoPriorContact poutcome;
-MODEL y(event='yes') = age job contact emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome / LACKFIT details CTABLE outroc=trainroc;
+PROC LOGISTIC DATA = train9010 DESCENDING plots=ALL;
+class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome Monday Thursday Retired Entrepre HouseMaid ;
+MODEL y(event='yes') = age Retired Entrepre HouseMaid contact month Monday campaign emp_var_rate cons_price_idx euribor3m poutcome / LACKFIT details CTABLE outroc=trainroc;
 score data=test out=testpred outroc=testroc;
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
 RUN;
-
-
-
-/*
-try removing education, and keep ; Blue_Collar, Entrepre, Retired, Services, Student   just since the p values are so high
-AUC Train = 0.7872
-AUC Test = 0.7767
-AIC = 7118.195
-*/
-
-
-PROC LOGISTIC DATA = train DESCENDING plots=ALL;
-class job education default housing loan contact month day_of_week y NoPriorContact poutcome Blue_Collar Entrepre Retired Services Student;
-MODEL y(event='yes') = age contact emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome Blue_Collar Entrepre Retired Services Student / LACKFIT details CTABLE outroc=trainroc;
-score data=test out=testpred outroc=testroc;
-roc; roccontrast;
-TITLE 'Bank Data Analysis';
-RUN;
-
-
-
-
 
 
 
@@ -253,14 +425,14 @@ RUN;
 /*
 **************************************** RESTART *******************************
 Try based on a model chosen from looking at the EDA
-AUC Train = 0.7894
-AUC Test = 0.7775
+AUC Train = 0.7952
+AUC Test = 0.7795
 AIC = 7099.226
 */
 
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
-class job marital education default housing loan month day_of_week y Blue_Collar Retired Student  NoPriorContact MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome;
-MODEL y(event='yes') = pdays previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed Blue_Collar Retired Student MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome/ LACKFIT details CTABLE outroc=trainroc;
+class job marital education default housing loan month day_of_week y Blue_Collar Retired Student  NoPriorContact MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth;
+MODEL y(event='yes') = pdays previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed Blue_Collar Retired Student MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth/ LACKFIT details CTABLE outroc=trainroc;
 score data=test out=testpred outroc=testroc;
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
@@ -268,16 +440,75 @@ RUN;
 
 
 /*
-Remove previous because of low p value
-
-AUC Train = 0.7894
-AUC Test = 0.7775
-AIC = 7097.226
+Remove previous
+AUC Train = 0.7952
+AUC Test = 0.7795
+AIC = 7024.740
 */
 
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
-class job marital education default housing loan month day_of_week y Blue_Collar Retired Student  NoPriorContact MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome;
-MODEL y(event='yes') = pdays emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed Blue_Collar Retired Student MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome/ LACKFIT details CTABLE outroc=trainroc;
+class job marital education default housing loan month day_of_week y Blue_Collar Retired Student  NoPriorContact MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth;
+MODEL y(event='yes') = pdays emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed Blue_Collar Retired Student MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth/ LACKFIT details CTABLE outroc=trainroc;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
+
+/*
+Remove marital unknown
+AUC Train = 0.7952
+AUC Test = 0.7798
+AIC = 7022.865
+*/
+
+PROC LOGISTIC DATA = train DESCENDING plots=ALL;
+class job marital education default housing loan month day_of_week y Blue_Collar Retired Student  NoPriorContact MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth;
+MODEL y(event='yes') = pdays emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed Blue_Collar Retired Student MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth/ LACKFIT details CTABLE outroc=trainroc;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
+
+/*
+Remove EducationIlliterate
+AUC Train = 0.7952
+AUC Test = 0.7821
+AIC = 7022.865
+*/
+
+PROC LOGISTIC DATA = train DESCENDING plots=ALL;
+class job marital education default housing loan month day_of_week y Blue_Collar Retired Student  NoPriorContact MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth;
+MODEL y(event='yes') = pdays emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed Blue_Collar Retired Student MaritalSingle EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth/ LACKFIT details CTABLE outroc=trainroc;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
+
+/*
+Remove Blue_Colloar
+AUC Train = 0.7948
+AUC Test = 0.7828
+AIC = 7022.865
+*/
+
+PROC LOGISTIC DATA = train DESCENDING plots=ALL;
+class job marital education default housing loan month day_of_week y Blue_Collar Retired Student  NoPriorContact MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth;
+MODEL y(event='yes') = pdays emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed Retired Student MaritalSingle EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth/ LACKFIT details CTABLE outroc=trainroc;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
+
+/*
+Remove euribor3m
+AUC Train = 0.7949
+AUC Test = 0.7828
+AIC = 7019.337
+*/
+
+PROC LOGISTIC DATA = train DESCENDING plots=ALL;
+class job marital education default housing loan month day_of_week y Blue_Collar Retired Student  NoPriorContact MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth;
+MODEL y(event='yes') = pdays emp_var_rate cons_price_idx cons_conf_idx nr_employed Retired Student MaritalSingle EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth/ LACKFIT details CTABLE outroc=trainroc;
 score data=test out=testpred outroc=testroc;
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
@@ -285,65 +516,69 @@ RUN;
 
 
 /*
-Use MaritalSingle only since unknown was low p value
-
-AUC Train = 0.7894
-AUC Test = 0.7780
-AIC = 7095.400
+Remove poutcome
+AUC Train = 0.7918
+AUC Test = 0.7817
+AIC = 7065.142
 */
 
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
-class job marital education default housing loan month day_of_week y Blue_Collar Retired Student  NoPriorContact MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome;
-MODEL y(event='yes') = pdays emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed Blue_Collar Retired Student MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome/ LACKFIT details CTABLE outroc=trainroc;
+class job marital education default housing loan month day_of_week y Blue_Collar Retired Student  NoPriorContact MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth;
+MODEL y(event='yes') = pdays emp_var_rate cons_price_idx cons_conf_idx nr_employed Retired Student MaritalSingle EducationUniversity EducationUnknown DefaultNo contact HighMonth/ LACKFIT details CTABLE outroc=trainroc;
 score data=test out=testpred outroc=testroc;
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
 RUN;
 
 /*
-remove blue collar since low p value
-
-AUC Train = 0.7895
-AUC Test = 0.7785
-AIC = 7093.580
+Remove Student
+AUC Train = 0.7914
+AUC Test = 0.7814
+AIC = 7065.296
 */
 
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
-class job marital education default housing loan month day_of_week y Blue_Collar Retired Student  NoPriorContact MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome;
-MODEL y(event='yes') = pdays emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed Retired Student MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome/ LACKFIT details CTABLE outroc=trainroc;
+class job marital education default housing loan month day_of_week y Blue_Collar Retired Student  NoPriorContact MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth;
+MODEL y(event='yes') = pdays emp_var_rate cons_price_idx cons_conf_idx nr_employed Retired MaritalSingle EducationUniversity EducationUnknown DefaultNo contact HighMonth/ LACKFIT details CTABLE outroc=trainroc;
 score data=test out=testpred outroc=testroc;
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
 RUN;
+
+
+/*****
+redo the previous but using 9010 training set
+*/
+
+PROC LOGISTIC DATA = train9010 DESCENDING plots=ALL;
+class job marital education default housing loan month day_of_week y Blue_Collar Retired Student  NoPriorContact MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth;
+MODEL y(event='yes') = pdays emp_var_rate cons_price_idx cons_conf_idx nr_employed Retired MaritalSingle EducationUniversity EducationUnknown DefaultNo contact HighMonth/ LACKFIT details CTABLE outroc=trainroc;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
+
+
+
+
 
 /*
-remove education illiterate since low p value
-
-AUC Train = 0.7895
-AUC Test = 0.7811
-AIC = 7092.184
+***************************************************
+USE FEATURE SELECTION
+*****************************************
 */
-
-PROC LOGISTIC DATA = train DESCENDING plots=ALL;
-class job marital education default housing loan month day_of_week y Blue_Collar Retired Student  NoPriorContact MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome;
-MODEL y(event='yes') = pdays emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed Retired Student MaritalSingle EducationUniversity EducationUnknown DefaultNo contact poutcome/ LACKFIT details CTABLE outroc=trainroc;
-score data=test out=testpred outroc=testroc;
-roc; roccontrast;
-TITLE 'Bank Data Analysis';
-RUN;
-
 
 /*
 Helpful : https://www.youtube.com/watch?v=qHoK783Gtzo
 build sas models using forward selection
-Train AUC = 0.7873
-Test AUC = 0.7762
+Train AUC = 0.7995
+Test AUC = 0.7884
 AIC = 7477.885
 */
 
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
 class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome;
-MODEL y(event='yes') = age job marital education housing contact loan previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome  / selection=forward LACKFIT details CTABLE outroc=trainroc;
+MODEL y(event='yes') = age job marital education default housing contact month day_of_week campaign pdays loan previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome / selection=forward LACKFIT details CTABLE outroc=trainroc;
 score data=test out=testpred outroc=testroc;
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
@@ -351,13 +586,13 @@ RUN;
 
 /*
 backward
-Train AUC = 0.7877
-Test AUC = 0.7759
-AIC = 7130.626
+Train AUC = 0.7955
+Test AUC = 0.7883
+AIC = 6951.001
 */
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
 class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome;
-MODEL y(event='yes') = age job marital education housing contact loan previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome  / selection=backward LACKFIT details CTABLE outroc=trainroc;
+MODEL y(event='yes') = age job marital education default housing contact month day_of_week campaign pdays loan previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome / selection=backward LACKFIT details CTABLE outroc=trainroc;
 score data=test out=testpred outroc=testroc;
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
@@ -367,14 +602,50 @@ RUN;
 
 /*
 stepwise
-Train AUC = 0.7877
-Test AUC = 0.7759
-AIC = 17190.727
+Train AUC = 0.7955
+Test AUC = 0.7883
+AIC = 7477.885
 */
 
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
 class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome;
-MODEL y(event='yes') = age job marital education housing contact loan previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome  / selection=stepwise LACKFIT details CTABLE outroc=trainroc;
+MODEL y(event='yes') = age job marital education default housing contact month day_of_week campaign pdays loan previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome / selection=stepwise LACKFIT details CTABLE outroc=trainroc;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
+
+
+/*
+**********************************************************************
+Redo test with 90/10 training data
+*/
+
+/*
+Helpful : https://www.youtube.com/watch?v=qHoK783Gtzo
+build sas models using forward selection
+Train AUC = 0.7954
+Test AUC = 0.7902
+AIC = 17157.381
+*/
+
+PROC LOGISTIC DATA = train9010 DESCENDING plots=ALL;
+class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome;
+MODEL y(event='yes') = age job marital education default housing contact month day_of_week campaign pdays loan previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome / selection=forward LACKFIT details CTABLE outroc=trainroc;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
+
+/*
+backward
+Train AUC = 0.7956
+Test AUC = 0.7903
+AIC = 15921.901
+*/
+PROC LOGISTIC DATA = train9010 DESCENDING plots=ALL;
+class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome;
+MODEL y(event='yes') = age job marital education default housing contact month day_of_week campaign pdays loan previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome / selection=backward LACKFIT details CTABLE outroc=trainroc;
 score data=test out=testpred outroc=testroc;
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
@@ -382,4 +653,18 @@ RUN;
 
 
 
+/*
+stepwise
+Train AUC = 0.7956
+Test AUC = 0.7903
+AIC = 17157.381
+*/
+
+PROC LOGISTIC DATA = train9010 DESCENDING plots=ALL;
+class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome;
+MODEL y(event='yes') = age job marital education default housing contact month day_of_week campaign pdays loan previous emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed poutcome / selection=stepwise LACKFIT details CTABLE outroc=trainroc;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
 
