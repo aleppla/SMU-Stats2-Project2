@@ -78,6 +78,8 @@ data train;
  else Thursday = 'no';
  if month in ('dec', 'mar', 'oct','sep') then HighMonth = 'yes';
  else HighMonth = 'no';
+ if y = 'yes' then yNum = 1;
+ else yNum = -1;
 run;
 
 data test9010FS;
@@ -404,6 +406,45 @@ TITLE 'Bank Data Analysis';
 RUN;
 
 
+/*
+
+Check VIF for this model
+emp_var_rate VIF = 27
+euribor3m VIF = 19.2
+*/
+
+PROC REG DATA=train;
+MODEL yNum = age campaign emp_var_rate cons_price_idx euribor3m / VIF; 
+run;
+
+
+/*
+remove emp_var_rate
+this increase AUC test
+AUC train = 0.7987
+AUC test = 0.7830
+AIC = 6995.817
+*/
+
+PROC LOGISTIC DATA = train DESCENDING plots=ALL;
+class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome Monday Thursday Retired Entrepre HouseMaid ;
+MODEL y(event='yes') = age Retired Entrepre HouseMaid contact month Monday campaign cons_price_idx euribor3m poutcome / LACKFIT details CTABLE outroc=trainroc;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
+
+
+/*
+Check VIF again without emp_var_rate
+all of the VIF's are < 1.5
+*/
+PROC REG DATA=train;
+MODEL yNum = age campaign cons_price_idx euribor3m / VIF; 
+run;
+
+
+
 /****
 *********
 Same model but using 9010 for training
@@ -412,7 +453,7 @@ Same model but using 9010 for training
 
 PROC LOGISTIC DATA = train9010 DESCENDING plots=ALL;
 class job marital education default housing loan contact month day_of_week y NoPriorContact poutcome Monday Thursday Retired Entrepre HouseMaid ;
-MODEL y(event='yes') = age Retired Entrepre HouseMaid contact month Monday campaign emp_var_rate cons_price_idx euribor3m poutcome / LACKFIT details CTABLE outroc=trainroc;
+MODEL y(event='yes') = age Retired Entrepre HouseMaid contact month Monday campaign cons_price_idx euribor3m poutcome / LACKFIT details CTABLE outroc=trainroc;
 score data=test out=testpred outroc=testroc;
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
@@ -545,6 +586,31 @@ roc; roccontrast;
 TITLE 'Bank Data Analysis';
 RUN;
 
+/*
+Check VIF again - emp_var_rate has VIF of 23
+*/
+PROC REG DATA=train;
+MODEL yNum = pdays emp_var_rate cons_price_idx cons_conf_idx nr_employed / VIF; 
+run;
+
+
+/*
+Remove emp_var_rate
+AUC Train = 0.7873
+AUC Test = 0.7781
+AIC = 7145.799
+*/
+
+PROC LOGISTIC DATA = train DESCENDING plots=ALL;
+format Retired Student MaritalSingle EducationIlliterate EducationIlliterate EducationUniversity EducationUnknown EducationUnknown DefaultNo HighMonth;
+class job marital education default housing loan month day_of_week y Blue_Collar Retired(ref='yes')  Student(ref='yes')  NoPriorContact MaritalUnknown MaritalSingle(ref='yes') EducationIlliterate(ref='yes') EducationUniversity(ref='yes') EducationUnknown(ref='yes') DefaultNo(ref='yes') contact poutcome HighMonth(ref='yes');
+MODEL y(event='yes') = pdays cons_price_idx cons_conf_idx nr_employed Retired MaritalSingle EducationUniversity EducationUnknown DefaultNo contact HighMonth/ LACKFIT details CTABLE outroc=trainroc;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
+
+
 
 /*****
 redo the previous but using 9010 training set
@@ -552,11 +618,14 @@ redo the previous but using 9010 training set
 
 PROC LOGISTIC DATA = train9010 DESCENDING plots=ALL;
 class job marital education default housing loan month day_of_week y Blue_Collar Retired Student  NoPriorContact MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth;
-MODEL y(event='yes') = pdays emp_var_rate cons_price_idx cons_conf_idx nr_employed Retired MaritalSingle EducationUniversity EducationUnknown DefaultNo contact HighMonth/ LACKFIT details CTABLE outroc=trainroc;
+MODEL y(event='yes') = pdays cons_price_idx cons_conf_idx nr_employed Retired MaritalSingle EducationUniversity EducationUnknown DefaultNo contact HighMonth/ LACKFIT details CTABLE outroc=trainroc;
 score data=test out=testpred outroc=testroc;
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
 RUN;
+
+
+
 
 
 
