@@ -35,6 +35,11 @@ BankData
 
 ```
 
+```{r}
+filter(BankData, job == "blue-")
+```
+
+
 # EDA
 ```{r}
 
