@@ -1,7 +1,7 @@
 ---
 title: "R Notebook"
 author: "Andrew Leppla"
-date: "3/24/2020"
+date: "4/16/2020"
 output: html_notebook
 editor_options: 
   chunk_output_type: console
@@ -15,6 +15,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r import}
 bank=read.csv("~/R/SMU-Stats2-Project2/bank-additional-full.csv", header=T, sep=";")
+summary(bank$y)
+bank$y=factor(bank$y,levels=c("yes","no"))
+summary(bank$y)
 ```
 
 ## Load Libraries
@@ -28,6 +31,7 @@ library(glmnet)
 library(bestglm)
 library(car)
 library(ResourceSelection)
+library(randomForest)
 #library(mvtnorm)
 ```
 
@@ -155,22 +159,6 @@ test_no<-bank_no[-index,] #All remaining no's in test set
 bank_train = rbind(train_yes,train_no)
 bank_test_all = rbind(test_yes,test_no)
 
-# Check that there are no missing variables between the training and test sets
-
-summary(bank_train)
-summary(bank_test)
-
-## job, education, and month all have many levels (>7)
-
-summary(bank_train$job)
-summary(bank_test$job)
-
-summary(bank_train$education)
-summary(bank_test$education)
-
-summary(bank_train$month)
-summary(bank_test$month)
-
 
 # Rebalance back to 90/10 for test set
 
@@ -191,16 +179,32 @@ test_no_50_50 = test_no[index,]
 
 bank_test_50_50 = rbind(test_yes,test_no_50_50)
 
-########################################################################
-# Use test_50_50 as test set
-bank_test=bank_test_all
 
 ########################################################################
- 
+# Use test_50_50 as test set
+bank_test=bank_test_90_10
+
+########################################################################
+
+# Check that there are no missing variables between the training and test sets
+
+summary(bank_train)
+summary(bank_test)
+
+## job, education, and month all have many levels (>7)
+
+summary(bank_train$job)
+summary(bank_test$job)
+
+summary(bank_train$education)
+summary(bank_test$education)
+
+summary(bank_train$month)
+summary(bank_test$month) 
 
 #Write CSV files for training & test sets
 
-#write.csv(bank_train,file="~/R/SMU-Stats2-Project2/bank_train_50_50.csv")
+#write.csv(bank_train_50_50,file="~/R/SMU-Stats2-Project2/bank_train_50_50.csv")
 #write.csv(bank_test_all,file="~/R/SMU-Stats2-Project2/bank_test_all.csv")
 #write.csv(bank_test_90_10,file="~/R/SMU-Stats2-Project2/bank_test_90_10.csv")
 #write.csv(bank_test_50_50,file="~/R/SMU-Stats2-Project2/bank_test_50_50.csv")
@@ -208,99 +212,176 @@ bank_test=bank_test_all
 ```
 
 
-```{r Simple LDA}
+## Check LDA Assumptions before analysis
 
-# LDA with single best predictor: pdays
+```{LDA Assumptions}
 
-## Full Data, No Validation
+# Check assumptions of equal covariance for LDA
+# Need to center/scale data
+# Do these really matter for predictions with training/test sets with large n?
 
-mylda1 <- lda(y ~ pdays, data = bank)
-pred<-predict(mylda1,newdata=bank)
-CM1 = confusionMatrix(table(pred$class,bank$y))
-CM1 # 90% accuracy
+# pdays (13) isn't really a continuous predictor, remove
 
-#Plot the simple LDA model
+cov.trob(bank[,c(12,14,16:20)])$cov 
+cor(bank[,c(12,4,16:20)])
+# nr.employed has high covariance and correlation, remove
+# euribor3m is highly correlated with emp.var.rate, remove
 
-np <- 300
-nd.x <- seq(from = min(bank$pdays), to = max(bank$pdays), length.out = np)
-nd.y <- seq(from = min(bank$cons.price.idx), to = max(bank$cons.price.idx), length.out = np)
-nd <- expand.grid(pdays = nd.x, cons.price.idx = nd.y)
+cov.trob(bank[,c(12,14,16:18)])$cov
+# 3-way combinations looks suspect for equal covariance 
+cov.mve(bank[,c(12,16:18)])$cov # scaled and centered
+# cons.conf.idx(18) has higher covariances
+cor(bank[,c(12,14,16:18)])
+# euribor3m highly correlated with emp.var.rate, remove
 
-prd <- as.numeric(predict(mylda1, newdata = nd)$class)
+# all correlation and covariance close to 0
+cov.trob(bank[,c(12,16,17)])$cov # centered
+cov.mve(bank[,c(12,16,17)])$cov # scaled and centered
+cov2cor(cov.mve(bank[,c(12,16,17)])$cov)
+cov2cor(cov.trob(bank[,c(12,16,17)])$cov)
+cor(bank[,c(12,16,17)])
 
-plot(bank[, c(13,17)], col = bank$y, main="Simple LDA")
-contour(x = nd.x, y = nd.y, z = matrix(prd, nrow = np, ncol = np), 
-        levels = c(1, 2), add = TRUE, drawlabels = FALSE, col="blue")
-
-
-## Leave-One_out Internal Cross Validation (CV)
-
-### Full Data
-
-mylda1a <- lda(y ~ pdays, data = bank, CV=T)
-CM1a = confusionMatrix(table(mylda1a$class,bank$y))
-CM1a # 90% accuracy
+# all correlation and covariance close to 0
+cov.trob(bank[,c(12,16,18)])$cov # centered
+cov.mve(bank[,c(12,16,18)])$cov # scaled and centered
+cov2cor(cov.mve(bank[,c(12,16,18)])$cov)
+cov2cor(cov.trob(bank[,c(12,16,18)])$cov)
+cor(bank[,c(12,16,18)])
 ```
 
 
-## Include campaign and previous in LDA
+## Simple LDA Model with Full Dataset and Internal CV
 
-```{r down-sampling LDA}
+```{r Simple LDA}
 
-## LDA w/ Down-Sampled Training Set
+# Full Data, No Validation
 
-mylda1b <- lda(y ~ pdays, data = bank_train)
+mylda1 <- lda(y ~ campaign + emp.var.rate + cons.price.idx, data = bank)
+pred<-predict(mylda1,newdata=bank2)
+
+# ROC Curve
+pred<-predict(mylda1,newdata=bank)
+preds1 <- as.data.frame(pred$posterior)
+pred1 <- prediction(preds1[,1],bank$y)
+roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred1, measure = "auc")
+auc.train <- auc.train@y.values
+plot(roc.perf)
+abline(a=0, b= 1,col="blue")
+text(x = .40, y = .4,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+title(main="Simple LDA - Full Data ROC Curve")
+# AUC=0.756
+
+# Leave-One_out Internal Cross Validation (CV)
+
+mylda1a <- lda(y ~ campaign + emp.var.rate + cons.price.idx, data = bank, CV=T)
+
+# ROC Curve
+preds1 <- as.data.frame(mylda1a$posterior)
+pred1 <- prediction(preds1[,1],bank$y)
+roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred1, measure = "auc")
+auc.train <- auc.train@y.values
+plot(roc.perf)
+abline(a=0, b= 1,col="blue")
+text(x = .40, y = .4,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+title(main="Simple LDA - Full Data ROC Curve")
+# AUC=0.747
+
+# Very slightly improved model with Internal CV, Overfit?
+
+mylda1b <- lda(y ~ campaign + emp.var.rate + cons.price.idx + euribor3m + nr.employed, data = bank, CV=T)
+
+# ROC Curve
+preds1 <- as.data.frame(mylda1b$posterior)
+pred1 <- prediction(preds1[,1],bank$y)
+roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred1, measure = "auc")
+auc.train <- auc.train@y.values
+plot(roc.perf)
+abline(a=0, b= 1,col="blue")
+text(x = .40, y = .4,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+title(main="Simple LDA - Full Data ROC Curve")
+# AUC=0.753
+
+```
+
+
+## 90/10 Training/Test Import from GitHub 
+
+To be consistent with the group's analysis in both R and SAS, 
+import training & test sets from GitHub:
+
+https://github.com/aleppla/SMU-Stats2-Project2/tree/master/Data-Files
+
+```{r import files from GitHub}
+
+bank_train=read.csv("~/R/SMU-Stats2-Project2/bank_train_90_10.csv", header=T)
+bank_test=read.csv("~/R/SMU-Stats2-Project2/bank_test_90_10.csv", header=T)
+bank_train$y=factor(bank_train$y,levels=c("yes","no"))
+bank_test$y=factor(bank_test$y,levels=c("yes","no"))
+bank_train=bank_train[,-1]
+bank_test=bank_test[,-1]
+
+```
+
+
+## Simple LDA Model with Down-Sample External CV
+
+```{r Simple LDA 90/10}
+
+## Simple LDA w/ Down-Sampled Training Set
+
+mylda1c <- qda(y ~ campaign + emp.var.rate + cons.price.idx, data = bank_train)
 
 ### Training Set
 
-pred<-predict(mylda1b,newdata=bank_train)
+pred<-predict(mylda1c,newdata=bank_train)
 preds1 <- as.data.frame(pred$posterior)
-pred1 <- prediction(preds1[,2],bank_train$y)
+pred1 <- prediction(preds1[,1],bank_train$y)
 roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
 auc.train <- performance(pred1, measure = "auc")
 auc.train <- auc.train@y.values
 plot(roc.perf)
 abline(a=0, b= 1,col="blue")
-text(x = .40, y = .4,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+text(x = .40, y = .5,paste("AUC = ", round(auc.train[[1]],4), sep = ""))
 title(main="Simple LDA - Train ROC Curve")
+# AUC=0.757 for LDA, 0.760 for QDA
 
-CM1b = confusionMatrix(table(pred$class,bank_train$y))
-CM1b
 
 ### Test Set - External Validation
 
-pred<-predict(mylda1b,newdata=bank_test)
+pred<-predict(mylda1c,newdata=bank_test)
 preds1 <- as.data.frame(pred$posterior)
-pred1 <- prediction(preds1[,2],bank_test$y)
+pred1 <- prediction(preds1[,1],bank_test$y)
 roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
 auc.train <- performance(pred1, measure = "auc")
 auc.train <- auc.train@y.values
 plot(roc.perf)
 abline(a=0, b= 1,col="blue")
-text(x = .40, y = .4,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
-title(main="Simple LSA - Test ROC Curve")
+text(x = .40, y = .5,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+title(main="Simple LDA - Test ROC Curve")
+# AUC=0.754 for LDA, 0.761 for QDA
 
-CM1c = confusionMatrix(table(pred$class,bank_test$y))
-CM1c
 ```
 
 
-```{r Obj2 Complex LDA}
+## Objective 2 Model Testing/Development
 
-# Add all cont. predictors and 2-way interactions to LDA model
-# Better ROC Curves, higher AUC
+```{r Obj2 Complex LDA - Internal CV}
 
+# Add 2-way interactions to LDA model
 ## Full Data Set, Leave-One-Out Interval CV
 
-bank2=bank[,c(12:14,16:20,21)]
-# age is the only factor that doesn't improve the model
+# Add all cont. predictors and 2-way interactions to LDA model
+bank2=bank[,c(1,12:14,16:20,21)]
+# previous(14) is the only factor that doesn't improve the model
+# age(1) improves model very slightly +0.002 AUC
 
-mylda2 <- lda(y ~.^2, data = bank2,CV=T)
-CM2 = confusionMatrix(table(mylda2$class,bank2$y))
-CM2
+mylda2 <- qda(y ~.^2, data = bank2,CV=T)
 
 preds1 <- as.data.frame(mylda2$posterior)
-pred1 <- prediction(preds1[,2],bank2$y)
+pred1 <- prediction(preds1[,1],bank2$y)
 roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
 auc.train <- performance(pred1, measure = "auc")
 auc.train <- auc.train@y.values
@@ -308,52 +389,150 @@ plot(roc.perf)
 abline(a=0, b= 1,col="blue")
 text(x = .40, y = .5,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
 title(main="LDA Complex Model - Internal CV ROC Curve")
-
-## Training/Test External CV
-
-bank2_train=bank_train[,c(12:14,16:20,21)]
-bank2_test=bank_test[,c(12:14,16:20,21)]
-
-mylda2a <- lda(y ~.^2, data = bank2_train)
-
-pred<-predict(mylda2a,newdata=bank2_train)
-preds1 <- as.data.frame(pred$posterior)
-pred1 <- prediction(preds1[,2],bank2_train$y)
-roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
-auc.train <- performance(pred1, measure = "auc")
-auc.train <- auc.train@y.values
-plot(roc.perf)
-abline(a=0, b= 1,col="blue")
-text(x = .35, y = .5,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
-title(main="LDA Complex Model - Train Set ROC Curve")
-
-pred<-predict(mylda2a,newdata=bank2_test)
-preds1 <- as.data.frame(pred$posterior)
-pred1 <- prediction(preds1[,2],bank2_test$y)
-roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
-auc.train <- performance(pred1, measure = "auc")
-auc.train <- auc.train@y.values
-plot(roc.perf)
-abline(a=0, b= 1,col="blue")
-text(x = .35, y = .5,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
-title(main="LDA Complex Model - Test Set ROC Curve")
-
-CM2 = confusionMatrix(table(pred$class,bank2_test$y))
-CM2 # 0.50 Threshold
+# AUC = 0.780 for LDA, 0.784 for QDA
 
 ```
 
 
-```{r Threshold and Priors}
+```{r Obj2 Complex LDA - External CV 90/10}
+
+## Training/Test External CV
+
+bank2_train=bank_train[,c(1,12:14,16:20,21)]
+bank2_test=bank_test[,c(1,12:14,16:20,21)]
+
+mylda2a <- lda(y ~.^2, data = bank2_train)
+
+
+# Training Set ROC Curve and Confusion Matrices
+
+pred<-predict(mylda2a,newdata=bank2_train)
+preds1 <- as.data.frame(pred$posterior)
+pred1 <- prediction(preds1[,1],bank2_train$y)
+roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred1, measure = "auc")
+auc.train <- auc.train@y.values
+plot(roc.perf)
+abline(a=0, b= 1,col="blue")
+text(x = .4, y = .5,paste("AUC = ", round(auc.train[[1]],4), sep = ""))
+title(main="LDA Complex Model - Train Set ROC Curve")
+# AUC=0.7978
+
+
+# Test Set ROC Curve and Confusion Matrices 
+
+pred<-predict(mylda2a,newdata=bank2_test)
+preds1 <- as.data.frame(pred$posterior)
+pred1 <- prediction(preds1[,1],bank2_test$y)
+roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred1, measure = "auc")
+auc.train <- auc.train@y.values
+plot(roc.perf)
+abline(a=0, b= 1,col="blue")
+text(x = .35, y = .5,paste("AUC = ", round(auc.train[[1]],4), sep = ""))
+title(main="LDA Complex Model - Test Set ROC Curve")
+# AUC=0.7837 for LDA
+
+# Default Threshold = 0.5
+confusionMatrix(table(pred$class,bank2_test$y))
+# 67% Sens, 80% Spec, 12.5% PPV
+
+# Extract Sens, Spec, and Threshold from ROC Curve
+roc.df <- data.frame( unlist(roc.perf@y.values),
+                      1-unlist(roc.perf@x.values),
+                      unlist(roc.perf@alpha.values) )
+names(roc.df)=c("Sensitivity","Specificity","Threshold")
+
+# Balanced Threshold
+roc.df$Bal=abs(roc.df$Sensitivity-roc.df$Specificity)
+roc.df[roc.df$Bal==min(roc.df$Bal),]
+thresh = roc.df$Threshold[roc.df$Bal==min(roc.df$Bal)]
+out = factor(ifelse(pred$posterior[,1] > thresh, "yes", "no"), levels = c("yes", "no"))
+LDA_balanced_test=confusionMatrix(out,bank2_test$y)
+LDA_balanced_test
+# Acc=Sens=Spec=PPV=NPV=0.72
+
+# Threshold for Sens=90%
+roc.df$Sens90=abs(roc.df$Sensitivity-0.90)
+roc.df[roc.df$Sens90==min(roc.df$Sens90),]
+thresh = mean(roc.df$Threshold[roc.df$Sens90==min(roc.df$Sens90)])
+out <- factor(ifelse(pred$posterior[,1] > thresh, "yes", "no"), levels = c("yes", "no"))
+LDA_Sens90_test=confusionMatrix(out,bank2_test$y)
+LDA_Sens90_test
+# Acc=33%, Sens=90%, Spec=30%, PPV=5%
+
+
+```
+
+
+## Objective 2 - QDA
+
+No better than LDA with really low thresholds.
+
+```{r Obj2 QDA 90/10}
+
+## Training/Test External CV
+
+bank2_train=bank_train[,c(1,12:13,17:19,20,21)]
+bank2_test=bank_test[,c(1,12:13,17:19,20,21)]
+
+# Training Set
+
+myqda <- qda(y ~.^2, data = bank2_train)
+
+pred<-predict(myqda,newdata=bank2_train)
+preds1 <- as.data.frame(pred$posterior)
+pred1 <- prediction(preds1[,1],bank2_train$y)
+roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred1, measure = "auc")
+auc.train <- auc.train@y.values
+plot(roc.perf)
+abline(a=0, b= 1,col="blue")
+text(x = .35, y = .5,paste("AUC = ", round(auc.train[[1]],4), sep = ""))
+title(main="LDA Complex Model - Train Set ROC Curve")
+# AUC=0.7915
+
+
+# Test Set
+
+pred<-predict(myqda,newdata=bank2_test)
+preds1 <- as.data.frame(pred$posterior)
+pred1 <- prediction(preds1[,1],bank2_test$y)
+roc.perf = performance(pred1, measure = "tpr", x.measure = "fpr")
+auc.train <- performance(pred1, measure = "auc")
+auc.train <- auc.train@y.values
+plot(roc.perf)
+abline(a=0, b= 1,col="blue")
+text(x = .35, y = .5,paste("AUC = ", round(auc.train[[1]],4), sep = ""))
+title(main="LDA Complex Model - Test Set ROC Curve")
+# AUC=0.7829
+
+
+roc.df <- data.frame( unlist(roc.perf@y.values),
+                      1-unlist(roc.perf@x.values),
+                      unlist(roc.perf@alpha.values) )
+names(roc.df)=c("Sensitivity","Specificity","Threshold")
+
+# Default Threshold = 0.5
+CM2_test = confusionMatrix(table(pred$class,bank2_test$y))
+CM2_test 
+# 67% Sens, 80% Spec, 12.5% PPV
+
+# Balanced Threshold
+roc.df$Bal=abs(roc.df$Sensitivity-roc.df$Specificity)
+roc.df[roc.df$Bal==min(roc.df$Bal),]
+thresh = roc.df$Threshold[roc.df$Bal==min(roc.df$Bal)]
+out = factor(ifelse(pred$posterior[,1] > thresh, "yes", "no"), levels = c("yes", "no"))
+LDA_balanced_test=confusionMatrix(out,bank2_test$y)
+LDA_balanced_test
+# Acc=Sens=Spec=PPV=NPV=0.72
+
+```
+
+
+```{r LDA Priors}
 
 # Just to have the code
-
-# Change the prediction threshold
-pred<-predict(mylda2,newdata=bank2)
-thresh <- 0.94
-out <- factor(ifelse(pred$posterior[,1] > thresh, "no", "yes"), levels = c("no", "yes"))
-confusionMatrix(out,bank2$y)
-
 
 # Change priors rather than prediction threshold
 mylda2p <- lda(y ~.^2, data = bank2,prior=c(0.33,0.67))
@@ -364,19 +543,17 @@ CM2p
 ```
 
 
-
-```{r Obj1 - Log Reg LASSO}
+```{r Obj1 - Log Reg LASSO 90/10}
 
 #glmnet requires a matrix 
-obj1.train.x <- model.matrix(y~.-1,bank_train[,c(-5,-11,-13,-17,-19,-20)]) 
+obj1.train.x <- model.matrix(y~.-1,bank_train[,c(-5,-11)]) 
 # Exclude duration, a response/covariate vs. a predictor
-# Exclude pdays, use recoded "pcontact" instead
-# Exclude economic indicators that are highly collinear
+
 
 cvfit1 <- cv.glmnet(obj1.train.x, bank_train$y, family = "binomial", type.measure = "class")
 plot(cvfit1)
-coef(cvfit1) # Elbow, 9 terms in model
-coef(cvfit1, s="lambda.min") # Next local min, 17 terms
+coef(cvfit1) # Elbow, 6 terms in model
+coef(cvfit1, s="lambda.min") # 39 terms
 
 ######################################
 # Doesn't maintain variable hierarchy
@@ -388,92 +565,138 @@ coef(cvfit1, s="lambda.min") # Next local min, 17 terms
 fit1.pred.train <- predict(cvfit1, newx = obj1.train.x, type = "response",s="lambda.min") 
 
 #Create ROC curves
-pred <- prediction(fit1.pred.train[,1], bank_train$y)
+pred <- prediction(1-fit1.pred.train, bank_train$y)
 roc.perf = performance(pred, measure = "tpr", x.measure = "fpr")
 auc.train <- performance(pred, measure = "auc")
 auc.train <- auc.train@y.values
-
 #Plot ROC
 plot(roc.perf)
 abline(a=0, b= 1) #Ref line indicating poor performance
-text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],4), sep = ""))
 title(main="Obj1 - Train Set ROC")
+# AUC = 0.7953
+
 
 #Run model from training set on valid. set 
-obj1.test.x = model.matrix(y~.-1,bank_test[,c(-5,-11,-13,-17,-19,-20)])
+obj1.test.x = model.matrix(y~.-1,bank_test[,c(-5,-11)])
 
 fit1.pred.test <- predict(cvfit1, newx = obj1.test.x, type = "response",s="lambda.min")
 
 #ROC curves
-pred1 <- prediction(fit1.pred.test[,1], bank_test$y)
+pred1 <- prediction(1-fit1.pred.test, bank_test$y)
 roc.perf1 = performance(pred1, measure = "tpr", x.measure = "fpr")
 auc.val1 <- performance(pred1, measure = "auc")
 auc.val1 <- auc.val1@y.values
 plot(roc.perf1)
 abline(a=0, b= 1)
-text(x = .40, y = .6,paste("AUC = ", round(auc.val1[[1]],3), sep = ""))
+text(x = .40, y = .6,paste("AUC = ", round(auc.val1[[1]],4), sep = ""))
 title(main="Obj1 - Test Set ROC")
+# AUC = 0.7878
+
+roc.df <- data.frame( unlist(roc.perf1@y.values),
+                      1-unlist(roc.perf1@x.values),
+                      unlist(roc.perf1@alpha.values) )
+names(roc.df)=c("Sensitivity","Specificity","Threshold")
+
+roc.df$Bal=abs(roc.df$Sensitivity-roc.df$Specificity)
+roc.df[roc.df$Bal==min(roc.df$Bal),]
+thresh = roc.df$Threshold[roc.df$Bal==min(roc.df$Bal)]
+out = factor(ifelse(1-fit1.pred.test > thresh, "yes", "no"), levels = c("yes", "no"))
+LASSO_balanced_test=confusionMatrix(out,bank_test$y)
+LASSO_balanced_test
 
 ```
 
 
-## Fit the selection model with GLM to get AIC, VIFs, etc.
+## Fit the LASSO model with GLM to get AIC, VIFs, etc.
 
-```{r GLM Logistic}
+```{r GLM Logistic 90/10}
 
-model.main<-glm(y~job+marital+education+contact+month+campaign+poutcome+emp.var.rate+cons.conf.idx, bank_train, 
-                family = binomial(link="logit"))
+model.main<-glm(y~job+marital+education+housing+contact+month+day_of_week+campaign+pdays+poutcome+emp.var.rate+cons.price.idx+cons.conf.idx+nr.employed, bank_train, family = binomial(link="logit"))
+
+#model.main<-glm(y~contact+month+pdays+poutcome+emp.var.rate+nr.employed, bank_train, family = binomial(link="logit"))
 
 summary(model.main)
 
-
 (vif(model.main)[,3])^2
-#previous VIF=5
+#emp.var.rate >> 10 VIF
 
 
 hoslem.test(model.main$y, fitted(model.main), g=10)
-# Sig. lack of fit, but large n
+# p=0.075
 
-fit1.pred.train <- predict(model.main, newdata = bank_train) 
+fit1.pred.train <- predict(model.main, newdata = bank_train, type = "response") 
 
 #Create ROC curves
-pred <- prediction(fit1.pred.train, bank_train$y)
+pred <- prediction(1-fit1.pred.train, bank_train$y)
 roc.perf = performance(pred, measure = "tpr", x.measure = "fpr")
 auc.train <- performance(pred, measure = "auc")
 auc.train <- auc.train@y.values
-
 #Plot ROC
 plot(roc.perf)
 abline(a=0, b= 1) #Ref line indicating poor performance
-text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],4), sep = ""))
 title(main="Train Set ROC")
-
+# AUC = 0.7925
 
 #Run model from training set on valid set 
-fit1.pred.test <- predict(model.main, newdata = bank_test)
+fit1.pred.test <- predict(model.main, newdata = bank_test, type = "response")
 
 #ROC curves
-pred1 <- prediction(fit1.pred.test, bank_test$y)
+pred1 <- prediction(1-fit1.pred.test, bank_test$y)
 roc.perf1 = performance(pred1, measure = "tpr", x.measure = "fpr")
 auc.val1 <- performance(pred1, measure = "auc")
 auc.val1 <- auc.val1@y.values
 plot(roc.perf1)
 abline(a=0, b= 1)
-text(x = .40, y = .6,paste("AUC = ", round(auc.val1[[1]],3), sep = ""))
+text(x = .40, y = .6,paste("AUC = ", round(auc.val1[[1]],4), sep = ""))
 title(main="Test Set ROC")
+# AUC = 0.784
+
+roc.df <- data.frame( unlist(roc.perf1@y.values),
+                      1-unlist(roc.perf1@x.values),
+                      unlist(roc.perf1@alpha.values) )
+names(roc.df)=c("Sensitivity","Specificity","Threshold")
+
+roc.df$Bal=abs(roc.df$Sensitivity-roc.df$Specificity)
+roc.df[roc.df$Bal==min(roc.df$Bal),]
+thresh = roc.df$Threshold[roc.df$Bal==min(roc.df$Bal)]
+out = factor(ifelse(1-fit1.pred.test > thresh, "yes", "no"), levels = c("yes", "no"))
+LASSO_balanced_test=confusionMatrix(out,bank_test$y)
+LASSO_balanced_test
 
 ```
 
 
 ## Fit a more complex Logistic model with interaction terms 
  
-!!! This will take a few minutes to run with all of the categorical interaction terms (800+) !!!
+Reduce training set size to 50/50 for faster compute times.
 
-```{r Objective 2}
+### 50/50 Training Set Import from GitHub 
+
+To be consistent with the group's analysis in both R and SAS, 
+import training & test sets from GitHub:
+
+https://github.com/aleppla/SMU-Stats2-Project2/tree/master/Data-Files
+
+```{r import files from GitHub}
+bank_train=read.csv("~/R/SMU-Stats2-Project2/bank_train_50_50.csv", header=T)
+bank_train$y=factor(bank_train$y,levels=c("yes","no"))
+bank_train=bank_train[,-1]
+
+```
+
+
+```{r LASSO with Interactions 50/50}
 
 #glmnet requires a matrix 
-dat.train.x <- model.matrix(y~.^2-1,bank_train[,c(-4,-5,-10,-11,-13,-17,-19,-20)])
-cvfit <- cv.glmnet(dat.train.x, bank_train$y, family = "binomial", type.measure = "class", nlambda = 30)
+dat.train.x <- model.matrix(y~.^2-1,bank_train[,c(-4,-5,-10,-11)])
+
+#model.main<-glm(y~contact+month+pdays+poutcome+emp.var.rate+nr.employed, bank_train, family = binomial(link="logit"))
+#bank_train2=bank_train[,c(8,9,13,15,16,20,21)]
+#dat.train.x <- model.matrix(y~.-1,bank_train2)
+
+cvfit <- cv.glmnet(dat.train.x, bank_train$y, family = "binomial", type.measure = "class", nlambda = 50)
 
 plot(cvfit)
 coef(cvfit) # 20/350 terms in model
@@ -485,87 +708,44 @@ coef(cvfit,s="lambda.min")
 
 #Get training set predictions...We know they are biased but lets create ROC's.
 #These are predicted probabilities from logistic model  exp(b)/(1+exp(b))
-fit.pred <- predict(cvfit, newx = dat.train.x, type = "response",s="lambda.min") 
-
+fit.pred <- predict(cvfit, newx = dat.train.x, type = "response",s="lambda.min") #
 #Create ROC curves
-pred <- prediction(fit.pred[,1], bank_train$y)
+pred <- prediction(1-fit.pred, bank_train$y)
 roc.perf = performance(pred, measure = "tpr", x.measure = "fpr")
 auc.train <- performance(pred, measure = "auc")
 auc.train <- auc.train@y.values
-
 #Plot ROC
 plot(roc.perf)
 abline(a=0, b= 1) #Ref line indicating poor performance
-text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
+text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],4), sep = ""))
 title(main="Obj2 Training Set ROC")
+# AUC = 0.7993, marginally better than simple model
 
 #Run model from training set on valid set 
-dat.test.x = model.matrix(y~.^2-1,bank_test[,c(-4,-5,-10,-11,-13,-17,-19,-20)])
+#bank_test2=bank_test[,c(-4,-5,-10,-11)]
+#dat.test.x = model.matrix(y~.-1,bank_test2)
 
-fit.pred1 <- predict(cvfit, newx = dat.test.x, type = "response",s="lambda.min")
+dat.test.x <- model.matrix(y~.-1,bank_test[,c(-4,-5,-10,-11)])
+
+fit.pred1 <- predict(cvfit, newx = dat.test.x, type = "response",s="lambda.min") #
 
 #ROC curves
-pred1 <- prediction(fit.pred1[,1], bank_test$y)
+pred1 <- prediction(1-fit.pred1, bank_test$y)
 roc.perf1 = performance(pred1, measure = "tpr", x.measure = "fpr")
 auc.val1 <- performance(pred1, measure = "auc")
 auc.val1 <- auc.val1@y.values
 plot(roc.perf1)
 abline(a=0, b= 1)
-text(x = .40, y = .6,paste("AUC = ", round(auc.val1[[1]],3), sep = ""))
+text(x = .40, y = .6,paste("AUC = ", round(auc.val1[[1]],4), sep = ""))
 title(main="Obj2 Test Set ROC")
-
+# AUC = 0.7849, marginally better than simple model
 ```
 
 
-```{r Obj2 - GLM Logistic}
-
-model.main2<-glm(y~job+marital+education+contact+month+campaign+poutcome+emp.var.rate+cons.conf.idx + 
-  job*cons.conf.idx + contact*cons.conf.idx + month*emp.var.rate + month*cons.conf.idx + campaign*cons.conf.idx +
-  poutcome*emp.var.rate + poutcome*cons.conf.idx, bank_train,family = binomial(link="logit"))
-
-cor(bank[,c(12,)])
-
-#housing +loan + job*marital + job*housing + job*poutcome + marital*month + marital*poutcome + contact*month + previous*poutcome + month*campaign +  
-
-summary(model.main2)
 
 
-(vif(model.main2)[,3])^2
 
-
-hoslem.test(model.main$y, fitted(model.main2), g=10)
-# Sig. lack of fit, but large n
-
-fit1.pred.train <- predict(model.main2, newdata = bank_train) 
-
-#Create ROC curves
-pred <- prediction(fit1.pred.train, bank_train$y)
-roc.perf = performance(pred, measure = "tpr", x.measure = "fpr")
-auc.train <- performance(pred, measure = "auc")
-auc.train <- auc.train@y.values
-
-#Plot ROC
-plot(roc.perf)
-abline(a=0, b= 1) #Ref line indicating poor performance
-text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],3), sep = ""))
-title(main="Train Set ROC")
-
-
-#Run model from training set on valid set 
-fit1.pred.test <- predict(model.main2, newdata = bank_test)
-
-#ROC curves
-pred1 <- prediction(fit1.pred.test, bank_test$y)
-roc.perf1 = performance(pred1, measure = "tpr", x.measure = "fpr")
-auc.val1 <- performance(pred1, measure = "auc")
-auc.val1 <- auc.val1@y.values
-plot(roc.perf1)
-abline(a=0, b= 1)
-text(x = .40, y = .6,paste("AUC = ", round(auc.val1[[1]],3), sep = ""))
-title(main="Test Set ROC")
-
-```
-
+## Dr. Turner's code for plotting multiple model AUC curves
 
 ```{r Compare}
 
@@ -592,3 +772,35 @@ abline(a=0, b= 1)
 
 ```
 
+
+
+```{r Randon Forest}
+#Random forrest
+#Here we will do a truly RF run by selecting mtry. mtry controls how many
+#predictors are sampled for each bootstrap sample.
+rf<-randomForest(y~.-duration,data=bank_train,mtry=9,importance=T,ntree=1000)
+
+
+#Go get the ROC
+rf.pred<-predict(rf,newdata=bank_test,type="prob")
+pred <- prediction(rf.pred[,1], bank_test$y)
+roc.perf = performance(pred, measure = "tpr", x.measure = "fpr")
+#Note in the following code the term "train" means nothing here. 
+#I'm just rinsing and repeating code the produces the curve.
+auc.train <- performance(pred, measure = "auc")
+auc.train <- auc.train@y.values
+plot(roc.perf,main="AUC of Test set RF - mtry=9")
+abline(a=0, b= 1)
+text(x = .40, y = .6,paste("AUC = ", round(auc.train[[1]],4), sep = ""))
+
+
+#Making predictions on test and then observing accuracy rates
+fit.pred<-predict(rf,newdata=bank_test,type="response",cutoff=c(0.58,0.42))
+confusionMatrix(fit.pred,bank_test$y) #Default prediction uses .5 as cut off you can change it specifying "cutoff" option
+
+
+#Which variables are important.  We can use variable importance.
+
+varImpPlot (rf,type=1,main="Variable Importance")
+varImpPlot (rf,type=2,main="Variable Importance")
+```
