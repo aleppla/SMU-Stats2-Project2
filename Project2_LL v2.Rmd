@@ -1,0 +1,167 @@
+---
+title: "Project 2 Applied Statistics"
+author: "Laura Lazarescou"
+date: "4/18/2020"
+output:
+  word_document: default
+  html_notebook: default
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load Libraries
+
+```{r libraries, include=FALSE}
+library(tidyverse)
+library(MASS)
+library(caret)
+library(ROCR)
+library(glmnet)
+library(bestglm)
+library(car)
+library(ResourceSelection)
+library(mosaic)
+#library(mvtnorm)
+```
+
+## Import Data
+
+```{r import}
+# bank=read.csv("~/R/SMU-Stats2-Project2/bank-additional-full.csv", header=T, sep=";")
+bank = read.csv(file.choose(), sep=";")  #choose bank-additional-full.csv from any directory
+```
+
+## Split Bank into Train and Test Datasets for Original Case (90_10) and Down-Selected Case (50_50)
+
+```{r training-test split yes and no}
+
+#Split all data by yes's and no's
+
+bank_yes=bank[bank$y=="yes",]
+bank_no=bank[bank$y=="no",]
+
+
+#Split yes and no into 70/30 separate training & test sets
+
+set.seed(123)
+index<-sample(seq(1:length(bank_yes$y)),round(.7*length(bank_yes$y)))
+train_yes<-bank_yes[index,]
+test_yes<-bank_yes[-index,]
+
+set.seed(234)
+index<-sample(seq(1:length(bank_no$y)),round(.7*length(bank_no$y)))
+train_no<-bank_no[index,]
+test_no<-bank_no[-index,]
+
+#Take same number of no's from train_no as yes's in train_yes for 50/50 training set
+
+yesnum <- length(train_yes$y)
+
+set.seed(3111)
+index<-sample(1:yesnum,yesnum,replace=F)  # same number of observations 
+train_no_50_50<-train_no[index,]  #randomly select 3248 observations from train_no - will add to train_yes for 50/50 scenario
+
+#Take same number of no's from test_no as yes's in test_yes for 50/50 test set
+
+yesnumtest <- length(test_yes$y)
+
+set.seed(311)
+index<-sample(1:yesnumtest,yesnumtest,replace=F)  # same number of observations as test_yes
+test_no_50_50<-test_no[index,]  #randomly select 1392 observations from test_no - will add to test_yes for 50/50 scenario
+
+# Complete 90/10 scenario
+
+# Combine train_yes and train_no = bank_train_90_10
+bank_train_90_10 = rbind(train_yes,train_no) 
+# Combine train_yes and test_no = bank_test_90_10
+bank_test_90_10 = rbind(test_yes,test_no) 
+
+# Down-selected 50/50 scenario
+# Combine train_yes and train_no_50_50 = bank_train_50_50
+bank_train_50_50 = rbind(train_yes,train_no_50_50) 
+# Combine train_yes and test_no_50_50 = bank_test_50_50
+bank_test_50_50 = rbind(test_yes,test_no_50_50) 
+
+# Remove duration for all datasets - not valid relative to our QoI
+bank_train_90_10$duration = NULL
+bank_train_50_50$duration = NULL
+bank_test_90_10$duration=NULL
+bank_test_50_50$duration=NULL
+
+#Write CSV files for training & test sets - used for SAS 
+
+#write.csv(bank_train_50_50,file="bank_train_50_50.csv")
+#write.csv(bank_test_50_50,file="bank_test_50_50.csv")
+#write.csv(bank_train_90_10,file="bank_train_90_10.csv")
+#write.csv(bank_test_90_10,file="bank_test_90_10.csv")
+
+
+```
+
+# Exploratory Data Analysis (EDA)
+
+```{r EDA}
+
+
+# Let's try a new package:  #install.packages('DataExplorer') 
+# Source for R code: https://towardsdatascience.com/simple-fast-exploratory-data-analysis-in-r-with-dataexplorer-package-e055348d9619
+
+bank_noy <- bank
+bank_noy$y = NULL
+
+
+library(DataExplorer)
+plot_str(bank)
+plot_missing(bank)
+plot_histogram(bank)
+plot_density(bank)
+plot_prcomp(bank_noy, variance_cap = 0.9, nrow = 2L, ncol = 2L)
+
+
+# Continuous Variables
+plot_correlation(bank.full, type = 'continuous','Review.Date')
+
+# Categorical variables
+plot_bar(bank.full)
+
+# Full report 
+create_report(bank.full)
+
+```
+
+
+#  Mosaic Plots
+
+
+```{r}
+
+# mosaicplot(bank_train_50_50, main = "Investment in Term Deposit", color = TRUE) #do not use complete model - build smaller tables or call out factors in formula
+
+## Formula interface for tabulated data:
+mosaicplot(~ job + default + y, data = bank, color = TRUE)  
+
+# OR reduce df to categorical vars
+
+df_cat<-(bank_train_50_50[,c(2,3,4,5,6,7,8,9,10,14,20)])
+
+mosaicplot(y ~ job + default, data = df_cat, shade = TRUE, main="Default v Job v Response", las=1) 
+
+mosaicplot(y ~ education + loan, data = df_cat, shade = TRUE, main="Education v Loan v Response", las = 1)
+
+mosaicplot(df_cat$y~ df_cat$job + df_cat$education, 
+           main = "Term Deposit Investing",
+           sub = "Job v Education",
+           xlab = "Job",
+           ylab = "Education",
+           las = 1,
+           off=30,
+           border = "chocolate",
+           shade = TRUE)
+
+
+```
+
