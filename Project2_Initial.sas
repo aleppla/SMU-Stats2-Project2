@@ -26,7 +26,7 @@ infile '/home/u36612003/bank_train_90_10NoQuotes.csv' dlm=',' firstobs=2;
 input rownum age job  $ marital $ education $ default $ housing $ loan $ contact $ month $ day_of_week $ duration campaign pdays previous poutcome $ emp_var_rate cons_price_idx cons_conf_idx euribor3m nr_employed y $;
 run;
 
-
+proc surveyselect data=train5050 rate=.75 out=train5050SmallOrig;
 
 
 
@@ -197,6 +197,44 @@ data train9010;
  else HighMonth = 'no';
 run;
 
+
+data train5050Small;
+ set train5050SmallOrig;
+ if pdays = 999 then NoPriorContact = 'yes';
+ else NoPriorContact = 'no';
+ if job = 'blue-col' then  Blue_Collar = 'yes';
+ else Blue_Collar = 'no';
+ if job = 'retired ' then  Retired = 'yes';
+ else Retired = 'no';
+ if job = 'student ' then  Student = 'yes';
+ else Student = 'no';
+ if job = 'services' then  Services = 'yes';
+ else Services = 'no';
+ if job = 'entrepre' then Entrepre = 'yes';
+ else Entrepre = 'no';
+ if job = 'housemai' then HouseMaid = 'yes';
+ else HouseMaid = 'no';
+ if marital = 'unknown ' then MaritalUnknown = 'yes';
+ else MaritalUnknown = 'no';
+ if marital = 'single ' then MaritalSingle = 'yes';
+ else MaritalSingle = 'no';
+ if education = 'illitera' then EducationIlliterate = 'yes';
+ else EducationIlliterate = 'no';
+ if education = 'universi' then EducationUniversity = 'yes';
+ else EducationUniversity = 'no';
+ if education = 'unknown' then EducationUnknown = 'yes';
+ else EducationUnknown = 'no';
+ if default = 'no' then DefaultNo  = 'yes';
+ else DefaultNo = 'no';
+ if poutcome = 'success' then poutcomeSuccess = 'yes';
+ else poutcomeSuccess = 'no';
+ if day_of_week = 'mon' then Monday = 'yes';
+ else Monday = 'no';
+ if day_of_week = 'thu' then Thursday = 'yes';
+ else Thursday = 'no';
+ if month in ('dec', 'mar', 'oct','sep') then HighMonth = 'yes';
+ else HighMonth = 'no';
+run;
 
 
 
@@ -604,12 +642,83 @@ AIC = 7145.799
 PROC LOGISTIC DATA = train DESCENDING plots=ALL;
 format Retired Student MaritalSingle EducationIlliterate EducationIlliterate EducationUniversity EducationUnknown EducationUnknown DefaultNo HighMonth;
 class job marital education default housing loan month day_of_week y Blue_Collar Retired(ref='yes')  Student(ref='yes')  NoPriorContact MaritalUnknown MaritalSingle(ref='yes') EducationIlliterate(ref='yes') EducationUniversity(ref='yes') EducationUnknown(ref='yes') DefaultNo(ref='yes') contact poutcome HighMonth(ref='yes');
-MODEL y(event='yes') = pdays cons_price_idx cons_conf_idx nr_employed Retired MaritalSingle EducationUniversity EducationUnknown DefaultNo contact HighMonth/ LACKFIT details CTABLE outroc=trainroc;
+MODEL y(event='yes') = pdays cons_price_idx cons_conf_idx nr_employed Retired MaritalSingle EducationUniversity EducationUnknown DefaultNo contact HighMonth/ aggregate LACKFIT details CTABLE outroc=trainroc;
+effectplot;
 score data=test out=testpred outroc=testroc;
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
 RUN;
 
+/*
+Check VIF without emp_var_rate
+*/
+PROC REG DATA=train;
+MODEL yNum = pdays cons_price_idx cons_conf_idx nr_employed / VIF; 
+run;
+
+/*
+Check the plots of residuals
+*/
+
+ods graphics on;
+PROC LOGISTIC DATA = train DESCENDING plots=ALL;
+format Retired Student MaritalSingle EducationIlliterate EducationIlliterate EducationUniversity EducationUnknown EducationUnknown DefaultNo HighMonth;
+class job marital education default housing loan month day_of_week y Blue_Collar Retired(ref='yes')  Student(ref='yes')  NoPriorContact MaritalUnknown MaritalSingle(ref='yes') EducationIlliterate(ref='yes') EducationUniversity(ref='yes') EducationUnknown(ref='yes') DefaultNo(ref='yes') contact poutcome HighMonth(ref='yes');
+MODEL y(event='yes') = pdays cons_price_idx cons_conf_idx nr_employed Retired MaritalSingle EducationUniversity EducationUnknown DefaultNo contact HighMonth/  IPLOTS INFLUENCE outroc=trainroc;
+RUN;
+
+/*
+Adding this to check outliers in particular. This is super slow
+*/
+ods graphics on;
+PROC LOGISTIC DATA = train DESCENDING plots=ALL;
+format Retired Student MaritalSingle EducationIlliterate EducationIlliterate EducationUniversity EducationUnknown EducationUnknown DefaultNo HighMonth;
+class job marital education default housing loan month day_of_week y Blue_Collar Retired(ref='yes')  Student(ref='yes')  NoPriorContact MaritalUnknown MaritalSingle(ref='yes') EducationIlliterate(ref='yes') EducationUniversity(ref='yes') EducationUnknown(ref='yes') DefaultNo(ref='yes') contact poutcome HighMonth(ref='yes');
+MODEL y(event='yes') = pdays cons_price_idx cons_conf_idx nr_employed Retired MaritalSingle EducationUniversity EducationUnknown DefaultNo contact HighMonth/ INFLUENCE IPLOTS outroc=trainroc;
+effectplot;
+score data=test out=testpred outroc=testroc;
+roc; roccontrast;
+TITLE 'Bank Data Analysis';
+RUN;
+
+
+
+PROC LOGISTIC DATA = train DESCENDING plots=ALL;
+format Retired Student MaritalSingle EducationIlliterate EducationIlliterate EducationUniversity EducationUnknown EducationUnknown DefaultNo HighMonth;
+class job marital education default housing loan month day_of_week y Blue_Collar Retired(ref='yes')  Student(ref='yes')  NoPriorContact MaritalUnknown MaritalSingle(ref='yes') EducationIlliterate(ref='yes') EducationUniversity(ref='yes') EducationUnknown(ref='yes') DefaultNo(ref='yes') contact poutcome HighMonth(ref='yes');
+MODEL y(event='yes') = age education / INFLUENCE IPLOTS outroc=trainroc;
+TITLE 'Bank Data Analysis';
+RUN;
+
+/*
+using a small dataset to see if we get the influence diagrams
+*/
+
+proc print data=train5050Small;
+
+PROC LOGISTIC DATA = train5050Small DESCENDING plots=ALL;
+format Retired Student MaritalSingle EducationIlliterate EducationUniversity EducationUnknown EducationUnknown DefaultNo HighMonth;
+class job marital education default housing loan month day_of_week y Blue_Collar Retired(ref='yes')  Student(ref='yes')  NoPriorContact MaritalUnknown MaritalSingle(ref='yes') EducationIlliterate(ref='yes') EducationUniversity(ref='yes') EducationUnknown(ref='yes') DefaultNo(ref='yes') contact poutcome HighMonth(ref='yes');
+MODEL y(event='yes') = pdays cons_price_idx cons_conf_idx nr_employed Retired MaritalSingle EducationUniversity EducationUnknown DefaultNo contact HighMonth / INFLUENCE IPLOTS outroc=trainroc;
+TITLE 'Bank Data Analysis';
+RUN;
+
+/*
+item 2961 is has high leverage... Why?
+*/
+
+
+
+/*
+add partial option
+*/
+
+PROC LOGISTIC DATA = train5050Small DESCENDING  plots=ALL;
+format Retired Student MaritalSingle EducationIlliterate EducationUniversity EducationUnknown EducationUnknown DefaultNo HighMonth;
+class job marital education default housing loan month day_of_week y Blue_Collar Retired(ref='yes')  Student(ref='yes')  NoPriorContact MaritalUnknown MaritalSingle(ref='yes') EducationIlliterate(ref='yes') EducationUniversity(ref='yes') EducationUnknown(ref='yes') DefaultNo(ref='yes') contact poutcome HighMonth(ref='yes');
+MODEL y(event='yes') = age education / partial outroc=trainroc;
+TITLE 'Bank Data Analysis';
+RUN;
 
 
 /*****
@@ -618,8 +727,10 @@ redo the previous but using 9010 training set
 
 PROC LOGISTIC DATA = train9010 DESCENDING plots=ALL;
 class job marital education default housing loan month day_of_week y Blue_Collar Retired Student  NoPriorContact MaritalUnknown MaritalSingle EducationIlliterate EducationUniversity EducationUnknown DefaultNo contact poutcome HighMonth;
-MODEL y(event='yes') = pdays cons_price_idx cons_conf_idx nr_employed Retired MaritalSingle EducationUniversity EducationUnknown DefaultNo contact HighMonth/ LACKFIT details CTABLE outroc=trainroc;
+MODEL y(event='yes') = pdays cons_price_idx cons_conf_idx nr_employed Retired MaritalSingle EducationUniversity EducationUnknown DefaultNo contact HighMonth/ LACKFIT CTABLE clodds=both outroc=trainroc;
 score data=test out=testpred outroc=testroc;
+output out=pred p=phat lower=lcl upper=ucl 
+	predprob=(individual crossvalidate);
 roc; roccontrast;
 TITLE 'Bank Data Analysis';
 RUN;
